@@ -1,0 +1,74 @@
+import asyncio
+import datetime as dt
+from app.config import settings
+from app.hetzner_client import HetznerClient
+from app.telegram_bot import Tg
+
+BYTES_IN_TB = 1024**4
+
+
+class MonitorService:
+    def __init__(self):
+        self.client = HetznerClient(settings.hetzner_token)
+        self.tg = Tg(settings.telegram_bot_token, settings.telegram_chat_id)
+        self.last_snapshot = []
+
+    async def collect(self):
+        servers = await self.client.list_servers()
+        rows = []
+        for s in servers:
+            outbound = await self.client.get_outbound_bytes_month(s["id"])
+            used_tb = outbound / BYTES_IN_TB
+            pct = used_tb / settings.traffic_limit_tb
+            row = {
+                "id": s["id"],
+                "name": s["name"],
+                "status": s["status"],
+                "ip": s.get("public_net", {}).get("ipv4", {}).get("ip", ""),
+                "used_tb": round(used_tb, 3),
+                "limit_tb": settings.traffic_limit_tb,
+                "ratio": round(pct, 4),
+                "over_threshold": pct >= settings.rotate_threshold,
+            }
+            rows.append(row)
+        self.last_snapshot = rows
+        return rows
+
+    async def rotate_if_needed(self):
+        rows = await self.collect()
+        for row in rows:
+            if row["over_threshold"]:
+                await self.rotate_server(row["id"])
+
+    async def rotate_server(self, server_id: int):
+        servers = await self.client.list_servers()
+        src = next((s for s in servers if s["id"] == server_id), None)
+        if not src:
+            return {"ok": False, "error": "server not found"}
+
+        desc = f"auto-rotate-{src['name']}-{dt.datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        snap = await self.client.create_snapshot(server_id, desc)
+        action_id = snap["action"]["id"]
+
+        image_id = None
+        for _ in range(120):
+            action = await self.client.get_action(action_id)
+            if action.get("status") == "success":
+                image_id = snap.get("image", {}).get("id")
+                break
+            if action.get("status") == "error":
+                await self.tg.send(f"❌ Rotate failed for {src['name']}: snapshot action error")
+                return {"ok": False, "error": "snapshot failed"}
+            await asyncio.sleep(5)
+
+        if not image_id:
+            await self.tg.send(f"❌ Rotate timeout for {src['name']} during snapshot")
+            return {"ok": False, "error": "snapshot timeout"}
+
+        new_srv = await self.client.create_server_from_image(src, image_id)
+        await self.client.delete_server(server_id)
+        await self.tg.send(f"✅ Rotated {src['name']} -> {new_srv['server']['name']}")
+        return {"ok": True, "new_server": new_srv}
+
+
+monitor = MonitorService()

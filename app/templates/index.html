@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hetzner Traffic Guard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <h2>Hetzner 流量监控</h2>
+  <button onclick="loadData()">刷新</button>
+  <table id="tb">
+    <thead><tr><th>ID</th><th>名称</th><th>IP</th><th>状态</th><th>已用(TB)</th><th>限额</th><th>占比</th><th>操作</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+services:
+  hetzner-traffic-guard:
+    build: .
+    container_name: hetzner-traffic-guard
+    restart: unless-stopped
+    ports:
+      - "1227:1227"
+    env_file:
+      - .env
