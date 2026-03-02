@@ -16,7 +16,7 @@
       <button id="themeBtn" onclick="toggleTheme()">☀️ 浅色</button>
       <input id="kw" placeholder="搜索服务器名/IP" />
       <button onclick="openCreateModal()">+ 创建服务器</button>
-      <button onclick="refreshInventory()">刷新库存</button>
+      <button onclick="openSnapshotsModal()">快照管理</button>
       <button onclick="loadData()">刷新</button>
     </div>
   </header>
@@ -24,6 +24,11 @@
   <section class="cards" id="cards"></section>
 
   <section class="panel">
+    <div class="panel-title">每日流量统计（最近7天）</div>
+    <div id="dailyStats" class="daily-stats">加载中...</div>
+  </section>
+
+  <section class="panel" style="margin-top:12px">
     <div class="panel-title">服务器列表</div>
     <table id="tb">
       <thead>
@@ -43,6 +48,7 @@
         <label>机房<select id="c_location"></select></label>
         <label>最少CPU核心<select id="f_cores"><option value="">不限</option><option>2</option><option>4</option><option>8</option><option>16</option></select></label>
         <label>最少内存GB<select id="f_mem"><option value="">不限</option><option>2</option><option>4</option><option>8</option><option>16</option><option>32</option></select></label>
+        <label>系列<select id="f_family"><option value="">全部系列</option></select></label>
         <label>型号<select id="c_type"></select><small id="typePrice"></small><small id="typeStock"></small></label>
         <label>镜像/快照<select id="c_image"></select><small id="costEst"></small></label>
       </div>
@@ -50,10 +56,21 @@
         <button class="ghost" onclick="preset('basic')">入门推荐</button>
         <button class="ghost" onclick="preset('balanced')">均衡推荐</button>
         <button class="ghost" onclick="preset('pro')">高配推荐</button>
+        <button class="ghost" onclick="refreshInventory()">刷新库存</button>
       </div>
       <div class="modal-actions">
         <button onclick="submitCreate()">创建</button>
         <button class="ghost" onclick="closeCreateModal()">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="snapshotsModal" class="modal hidden">
+    <div class="modal-card">
+      <h3>快照管理</h3>
+      <div id="snapshotsList">加载中...</div>
+      <div class="modal-actions">
+        <button class="ghost" onclick="closeSnapshotsModal()">关闭</button>
       </div>
     </div>
   </div>

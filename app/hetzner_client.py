@@ -37,12 +37,7 @@ class HetznerClient:
         now = dt.datetime.utcnow()
         start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
         end = now.replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
-        params = {
-            "type": "network",
-            "start": start,
-            "end": end,
-            "step": "3600",
-        }
+        params = {"type": "network", "start": start, "end": end, "step": "3600"}
         async with httpx.AsyncClient(timeout=30) as c:
             r = await c.get(f"{BASE}/servers/{server_id}/metrics", headers=self.headers, params=params)
             r.raise_for_status()
@@ -54,6 +49,22 @@ class HetznerClient:
             if len(point) > 1 and point[1] is not None:
                 total += int(float(point[1]))
         return total
+
+    async def get_outbound_daily(self, server_id: int, days: int = 7):
+        now = dt.datetime.utcnow().replace(microsecond=0)
+        start = (now - dt.timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        end = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        params = {"type": "network", "start": start, "end": end, "step": "86400"}
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.get(f"{BASE}/servers/{server_id}/metrics", headers=self.headers, params=params)
+            r.raise_for_status()
+            data = r.json()
+        series = data.get("metrics", {}).get("time_series", {}).get("network.0.tx", [])
+        out = []
+        for p in series:
+            if len(p) > 1 and p[1] is not None:
+                out.append({"date": str(p[0])[:10], "bytes": int(float(p[1]))})
+        return out
 
     async def create_snapshot(self, server_id: int, description: str):
         payload = {"type": "snapshot", "description": description}
@@ -96,5 +107,11 @@ class HetznerClient:
     async def delete_server(self, server_id: int):
         async with httpx.AsyncClient(timeout=30) as c:
             r = await c.delete(f"{BASE}/servers/{server_id}", headers=self.headers)
+            r.raise_for_status()
+            return True
+
+    async def delete_snapshot(self, image_id: int):
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.delete(f"{BASE}/images/{image_id}", headers=self.headers)
             r.raise_for_status()
             return True

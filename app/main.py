@@ -48,6 +48,13 @@ async def meta():
     return await monitor.meta()
 
 
+@app.get('/api/daily_stats')
+async def daily_stats(days: int = 7):
+    if not settings.hetzner_token:
+        raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
+    return await monitor.daily_stats(days=days)
+
+
 @app.post('/api/rotate/{server_id}')
 async def rotate(server_id: int):
     if not settings.hetzner_token:
@@ -74,3 +81,10 @@ async def create_server(req: CreateServerReq):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
     return await monitor.create_server_manual(name=req.name, server_type=req.server_type, location=req.location, image=req.image)
+
+
+@app.delete('/api/snapshot/{image_id}')
+async def delete_snapshot(image_id: int):
+    if not settings.hetzner_token:
+        raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
+    return await monitor.delete_snapshot_manual(image_id)

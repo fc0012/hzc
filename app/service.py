@@ -32,8 +32,24 @@ class MonitorService:
                 for t in types
             ],
             "locations": [{"name": l.get("name"), "city": l.get("city")} for l in locations],
-            "snapshots": [{"id": i.get("id"), "name": i.get("description") or i.get("name")} for i in snapshots],
+            "snapshots": [
+                {
+                    "id": i.get("id"),
+                    "name": i.get("description") or i.get("name"),
+                    "size_gb": round(float(i.get("image_size") or 0), 2),
+                    "created": i.get("created"),
+                }
+                for i in snapshots
+            ],
         }
+
+    async def daily_stats(self, days: int = 7):
+        servers = await self.client.list_servers()
+        result = []
+        for s in servers:
+            daily = await self.client.get_outbound_daily(s["id"], days=days)
+            result.append({"id": s["id"], "name": s["name"], "daily": daily})
+        return result
 
     async def collect(self):
         servers = await self.client.list_servers()
@@ -103,14 +119,27 @@ class MonitorService:
         if not src:
             return {"ok": False, "error": "server not found"}
         disk_gb = float(src.get("server_type", {}).get("disk", 0) or 0)
-        est_monthly = round(disk_gb * settings.snapshot_price_per_gb, 4)
+
+        # Better estimate: use average existing snapshot size if available, else 35% of disk
+        try:
+            snapshots = await self.client.list_snapshots()
+        except Exception:
+            snapshots = []
+        sizes = [float(i.get("image_size") or 0) for i in snapshots if i.get("image_size")]
+        avg_size = (sum(sizes) / len(sizes)) if sizes else 0
+        est_size_gb = round(avg_size if avg_size > 0 else (disk_gb * 0.35), 2)
+        est_size_gb = min(max(est_size_gb, 1.0), disk_gb if disk_gb > 0 else est_size_gb)
+
+        est_monthly = round(est_size_gb * settings.snapshot_price_per_gb, 4)
         return {
             "ok": True,
             "server_id": server_id,
             "server_name": src.get("name"),
             "disk_gb": disk_gb,
+            "estimated_snapshot_size_gb": est_size_gb,
             "snapshot_price_per_gb": settings.snapshot_price_per_gb,
             "estimated_monthly_eur": est_monthly,
+            "estimation_note": "基于历史快照均值；无历史时按磁盘35%估算",
         }
 
     async def create_snapshot_manual(self, server_id: int, description: str | None = None):
@@ -124,6 +153,11 @@ class MonitorService:
         created = await self.client.create_server(name=name, server_type=server_type, location=location, image=image)
         await self.tg.send(f"🆕 New server created: {created.get('server', {}).get('name', name)}")
         return created
+
+    async def delete_snapshot_manual(self, image_id: int):
+        await self.client.delete_snapshot(image_id)
+        await self.tg.send(f"🗑️ Snapshot deleted: {image_id}")
+        return {"ok": True, "deleted": image_id}
 
 
 monitor = MonitorService()
