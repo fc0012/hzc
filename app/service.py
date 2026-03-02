@@ -38,6 +38,9 @@ class MonitorService:
         rows = await self.collect()
         for row in rows:
             if row["over_threshold"]:
+                if settings.safe_mode:
+                    await self.tg.send(f"⚠️ SAFE_MODE 告警: {row['name']} 流量占比 {round(row['ratio']*100,2)}%，仅通知不执行删除/重建")
+                    continue
                 await self.rotate_server(row["id"])
 
     async def rotate_server(self, server_id: int):

@@ -20,7 +20,8 @@ bash scripts/onekey.sh
 
 ## 功能
 - 每 `CHECK_INTERVAL_MINUTES` 分钟检测流量
-- 超阈值（`ROTATE_THRESHOLD`）自动轮换服务器
+- 极简安全模式（`SAFE_MODE=true`）下：仅告警，不自动删机
+- 关闭安全模式后：超阈值（`ROTATE_THRESHOLD`）自动轮换服务器
 - Web 面板展示每台机器流量占比，支持手动重建
 - Telegram 通知轮换结果
 

@@ -38,11 +38,13 @@ ask "TELEGRAM_BOT_TOKEN" "请输入 Telegram Bot Token(可留空)" 1
 ask "TELEGRAM_CHAT_ID" "请输入 Telegram Chat ID(可留空)"
 ask "ROTATE_THRESHOLD" "触发阈值(默认0.98更安全)"
 ask "CHECK_INTERVAL_MINUTES" "检测间隔分钟(默认5)"
+ask "SAFE_MODE" "是否开启极简安全模式(默认true，仅告警不自动删除重建)"
 
 # 安全默认值
 sed -i 's#^TRAFFIC_LIMIT_TB=.*#TRAFFIC_LIMIT_TB=20#' .env
 if ! grep -q '^ROTATE_THRESHOLD=' .env; then echo 'ROTATE_THRESHOLD=0.98' >> .env; fi
 if ! grep -q '^CHECK_INTERVAL_MINUTES=' .env; then echo 'CHECK_INTERVAL_MINUTES=5' >> .env; fi
+if ! grep -q '^SAFE_MODE=' .env; then echo 'SAFE_MODE=true' >> .env; fi
 
 
 echo "[i] 启动中..."
