@@ -1,6 +1,7 @@
 function byId(x){return document.getElementById(x)}
 let META={server_types:[],locations:[],snapshots:[]}
 let CURRENT_SERVERS=[]
+let DAILY_MAP={}
 
 const toast=(msg)=>{const t=byId('toast');t.textContent=msg;t.classList.remove('hidden');clearTimeout(window.__toastT);window.__toastT=setTimeout(()=>t.classList.add('hidden'),2200)}
 
@@ -20,18 +21,38 @@ function renderCards(data){
 function renderDailyStats(items){
   const box=byId('dailyStats')
   if(!items?.length){box.textContent='暂无数据';return}
-  box.innerHTML=items.map(s=>{const recent=(s.daily||[]).slice(-3).map(d=>`${d.date}: ${(d.bytes/1024/1024/1024).toFixed(2)}GB`).join(' · ');return `<div class="daily-item"><b>${s.name}</b><div class="daily-mini">${recent||'无最近数据'}</div></div>`}).join('')
+  DAILY_MAP={}
+  box.innerHTML=items.map(s=>{
+    const daily=(s.daily||[])
+    DAILY_MAP[s.id]=daily
+    const gb=daily.map(x=>x.bytes/1024/1024/1024)
+    const max=Math.max(...gb,1)
+    const avg=gb.length?gb.reduce((a,b)=>a+b,0)/gb.length:0
+    const today=gb.length?gb[gb.length-1]:0
+    const ratio=avg>0?today/avg:1
+    const level=ratio>=2?'crit':(ratio>=1.5?'warn':'ok')
+    const bars=gb.slice(-7).map(v=>{const h=Math.max(3,Math.round(v/max*28));const cls=v>=avg*2?'crit':(v>=avg*1.5?'hot':'');return `<i class='${cls}' style='height:${h}px'></i>`}).join('')
+    const recent=daily.slice(-3).map(d=>`${d.date}: ${(d.bytes/1024/1024/1024).toFixed(2)}GB`).join(' · ')
+    const badge=level==='ok'?'':`<span class='badge-traffic ${level==='crit'?'badge-crit':'badge-warn'}'>${level==='crit'?'异常峰值':'高于均值'}</span>`
+    return `<div class="daily-item"><b>${s.name}</b>${badge}<div class="spark">${bars}</div><div class="daily-mini">${recent||'无最近数据'}</div></div>`
+  }).join('')
 }
 
 function rowHtml(r){
   const pct=Math.min(100,(r.ratio||0)*100),warn=r.over_threshold
+  const daily=DAILY_MAP[r.id]||[]
+  const gb=daily.map(x=>x.bytes/1024/1024/1024)
+  const avg=gb.length?gb.reduce((a,b)=>a+b,0)/gb.length:0
+  const today=Number(r.today_gb||0)
+  const anomaly=avg>0 && today>=avg*2 ? 'crit' : (avg>0 && today>=avg*1.5 ? 'warn' : '')
+  const todayCell=`${r.today_gb} GB ${anomaly?`<span class='badge-traffic ${anomaly==='crit'?'badge-crit':'badge-warn'}'>${anomaly==='crit'?'异常':'偏高'}</span>`:''}`
   return `<tr>
     <td><span title="点击复制ID" onclick="copyText('${r.id}')" style="cursor:pointer">${r.id}</span></td>
     <td>${r.name}</td>
     <td>${r.server_type || '-'} · ${r.cores||0}C/${r.memory_gb||0}GB/${r.disk_gb||0}GB</td>
     <td>${r.ip||''}</td>
     <td><span class="badge ${r.status==='running'?'running':'other'}">${r.status}</span></td>
-    <td>${r.used_gb} GB (${r.used_tb} TB)</td><td>${r.today_gb} GB</td><td>${r.limit_tb} TB</td>
+    <td>${r.used_gb} GB (${r.used_tb} TB)</td><td>${todayCell}</td><td>${r.limit_tb} TB</td>
     <td><div class="progress"><div class="bar ${warn?'warn':''}" style="width:${pct}%"></div></div><div class="ratio-text">${pct.toFixed(1)}%</div></td>
     <td>
       <button class="btn btn-danger action" onclick="rotate(${r.id})">重建</button>
