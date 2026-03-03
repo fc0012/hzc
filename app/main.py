@@ -36,6 +36,13 @@ class RenameServerReq(BaseModel):
     name: str
 
 
+class QBNodeReq(BaseModel):
+    server_id: int
+    url: str
+    username: str
+    password: str
+
+
 @app.on_event('startup')
 async def startup_event():
     if settings.hetzner_token:
@@ -75,6 +82,21 @@ async def daily_stats(days: int = 7):
 @app.get('/api/qb_status')
 async def qb_status():
     return await monitor.qb_status()
+
+
+@app.get('/api/qb_nodes')
+async def qb_nodes():
+    return monitor.qb_nodes()
+
+
+@app.post('/api/qb_node')
+async def qb_node_set(req: QBNodeReq):
+    return await monitor.qb_node_set(req.server_id, req.url, req.username, req.password)
+
+
+@app.delete('/api/qb_node/{server_id}')
+async def qb_node_delete(server_id: int):
+    return monitor.qb_node_delete(server_id)
 
 
 @app.post('/api/rotate/{server_id}')

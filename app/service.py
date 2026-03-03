@@ -4,6 +4,7 @@ from app.config import settings
 from app.hetzner_client import HetznerClient
 from app.telegram_bot import Tg
 from app.qb_client import QBClient
+from app.qb_store import QBStore
 
 BYTES_IN_TB = 1024**4
 
@@ -13,6 +14,7 @@ class MonitorService:
         self.client = HetznerClient(settings.hetzner_token)
         self.tg = Tg(settings.telegram_bot_token, settings.telegram_chat_id)
         self.qb = QBClient(settings.qb_url, settings.qb_username, settings.qb_password)
+        self.qb_store = QBStore(settings.qb_store_path)
         self.last_snapshot = []
 
     async def meta(self):
@@ -56,6 +58,12 @@ class MonitorService:
     async def collect(self):
         servers = await self.client.list_servers()
         rows = []
+
+        qb_nodes = self.qb_store.get_all()
+        qb_tasks = {}
+        for sid, node in qb_nodes.items():
+            qb_tasks[str(sid)] = asyncio.create_task(QBClient.fetch_stats(node.get("url", ""), node.get("username", ""), node.get("password", "")))
+
         for s in servers:
             outbound = await self.client.get_outbound_bytes_month(s["id"])
             used_tb = outbound / BYTES_IN_TB
@@ -65,6 +73,14 @@ class MonitorService:
             today_gb = 0.0
             if daily:
                 today_gb = (daily[-1].get("bytes", 0) / (1024**3))
+            qbs = {"enabled": False}
+            t = qb_tasks.get(str(s["id"]))
+            if t:
+                try:
+                    qbs = await t
+                except Exception as e:
+                    qbs = {"enabled": True, "error": str(e)}
+
             row = {
                 "id": s["id"],
                 "name": s["name"],
@@ -80,6 +96,7 @@ class MonitorService:
                 "limit_tb": settings.traffic_limit_tb,
                 "ratio": round(pct, 4),
                 "over_threshold": pct >= settings.rotate_threshold,
+                "qb": qbs,
             }
             rows.append(row)
         self.last_snapshot = rows
@@ -256,6 +273,23 @@ class MonitorService:
 
     async def qb_status(self):
         return await self.qb.stats()
+
+    def qb_nodes(self):
+        return self.qb_store.get_all()
+
+    async def qb_node_set(self, server_id: int, url: str, username: str, password: str):
+        node = {"url": url, "username": username, "password": password}
+        self.qb_store.set(server_id, node)
+        # quick test
+        try:
+            st = await QBClient.fetch_stats(url, username, password)
+            return {"ok": True, "server_id": server_id, "status": st}
+        except Exception as e:
+            return {"ok": False, "server_id": server_id, "error": str(e)}
+
+    def qb_node_delete(self, server_id: int):
+        self.qb_store.delete(server_id)
+        return {"ok": True, "server_id": server_id}
 
 
 monitor = MonitorService()

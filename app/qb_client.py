@@ -2,29 +2,26 @@ import httpx
 
 
 class QBClient:
-    def __init__(self, url: str, username: str, password: str):
+    def __init__(self, url: str = "", username: str = "", password: str = ""):
         self.url = (url or "").rstrip("/")
         self.username = username
         self.password = password
 
-    @property
-    def enabled(self):
-        return bool(self.url and self.username and self.password)
-
-    async def stats(self):
-        if not self.enabled:
+    @staticmethod
+    async def fetch_stats(url: str, username: str, password: str):
+        if not (url and username and password):
             return {"enabled": False}
+        base = (url or "").rstrip("/")
 
-        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as c:
-            # login
-            r = await c.post(f"{self.url}/api/v2/auth/login", data={"username": self.username, "password": self.password})
+        async with httpx.AsyncClient(timeout=12, follow_redirects=True) as c:
+            r = await c.post(f"{base}/api/v2/auth/login", data={"username": username, "password": password})
             r.raise_for_status()
 
-            info = await c.get(f"{self.url}/api/v2/transfer/info")
+            info = await c.get(f"{base}/api/v2/transfer/info")
             info.raise_for_status()
             transfer = info.json()
 
-            md = await c.get(f"{self.url}/api/v2/sync/maindata")
+            md = await c.get(f"{base}/api/v2/sync/maindata")
             md.raise_for_status()
             maindata = md.json()
 
@@ -44,4 +41,12 @@ class QBClient:
             "active_torrents": active,
             "dht_nodes": transfer.get("dht_nodes", 0),
             "connection_status": transfer.get("connection_status", "unknown"),
+            "url": base,
         }
+
+    @property
+    def enabled(self):
+        return bool(self.url and self.username and self.password)
+
+    async def stats(self):
+        return await QBClient.fetch_stats(self.url, self.username, self.password)

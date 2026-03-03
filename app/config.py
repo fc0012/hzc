@@ -18,6 +18,7 @@ class Settings(BaseModel):
     qb_url: str = os.getenv("QB_URL", "")
     qb_username: str = os.getenv("QB_USERNAME", "")
     qb_password: str = os.getenv("QB_PASSWORD", "")
+    qb_store_path: str = os.getenv("QB_STORE_PATH", "/app/state/qb_nodes.json")
 
 
 settings = Settings()

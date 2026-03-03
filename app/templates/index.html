@@ -50,7 +50,7 @@
       <table id="tb">
         <thead>
         <tr>
-          <th>ID</th><th>名称</th><th>配置/型号</th><th>IP</th><th>状态</th><th>已用流量</th><th>24h流量</th><th>限额</th><th>占比</th><th>操作</th>
+          <th>ID</th><th>名称</th><th>配置/型号</th><th>IP</th><th>状态</th><th>qB实时</th><th>已用流量</th><th>24h流量</th><th>限额</th><th>占比</th><th>操作</th>
         </tr>
         </thead>
         <tbody></tbody>
@@ -92,6 +92,23 @@
       <div id="snapshotsList">加载中...</div>
       <div class="modal-actions">
         <button class="btn" onclick="closeSnapshotsModal()">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="qbModal" class="modal hidden">
+    <div class="modal-card glass">
+      <h3>配置 qB 节点</h3>
+      <div class="grid">
+        <label>服务器ID<input id="qb_server_id" readonly /></label>
+        <label>qB URL<input id="qb_url" placeholder="http://ip:8080" /></label>
+        <label>用户名<input id="qb_user" /></label>
+        <label>密码<input id="qb_pass" type="password" /></label>
+      </div>
+      <div class="modal-actions">
+        <button class="btn primary" onclick="saveQBNode()">保存并测试</button>
+        <button class="btn" onclick="deleteQBNode()">删除配置</button>
+        <button class="btn" onclick="closeQBModal()">关闭</button>
       </div>
     </div>
   </div>

@@ -2,6 +2,7 @@ function byId(x){return document.getElementById(x)}
 let META={server_types:[],locations:[],snapshots:[]}
 let CURRENT_SERVERS=[]
 let DAILY_MAP={}
+let QB_NODES={}
 
 const toast=(msg)=>{const t=byId('toast');t.textContent=msg;t.classList.remove('hidden');clearTimeout(window.__toastT);window.__toastT=setTimeout(()=>t.classList.add('hidden'),2200)}
 
@@ -46,15 +47,23 @@ function rowHtml(r){
   const today=Number(r.today_gb||0)
   const anomaly=avg>0 && today>=avg*2 ? 'crit' : (avg>0 && today>=avg*1.5 ? 'warn' : '')
   const todayCell=`${r.today_gb} GB ${anomaly?`<span class='badge-traffic ${anomaly==='crit'?'badge-crit':'badge-warn'}'>${anomaly==='crit'?'异常':'偏高'}</span>`:''}`
+
+  const q=r.qb||{}
+  const qbCell = q.enabled
+    ? `↑ ${(q.up_speed/1024/1024).toFixed(2)} / ↓ ${(q.dl_speed/1024/1024).toFixed(2)} MiB/s<br><span class='daily-mini'>↑ ${(q.up_total/1024/1024/1024/1024).toFixed(2)} / ↓ ${(q.dl_total/1024/1024/1024/1024).toFixed(2)} TiB</span>`
+    : `<span class='daily-mini'>未配置</span>`
+
   return `<tr>
     <td><span title="点击复制ID" onclick="copyText('${r.id}')" style="cursor:pointer">${r.id}</span></td>
     <td>${r.name}</td>
     <td>${r.server_type || '-'} · ${r.cores||0}C/${r.memory_gb||0}GB/${r.disk_gb||0}GB</td>
     <td>${r.ip||''}</td>
     <td><span class="badge ${r.status==='running'?'running':'other'}">${r.status}</span></td>
+    <td>${qbCell}</td>
     <td>${r.used_gb} GB (${r.used_tb} TB)</td><td>${todayCell}</td><td>${r.limit_tb} TB</td>
     <td><div class="progress"><div class="bar ${warn?'warn':''}" style="width:${pct}%"></div></div><div class="ratio-text">${pct.toFixed(1)}%</div></td>
     <td>
+      <button class="btn action" onclick="openQBModal(${r.id})">配置qB</button>
       <button class="btn action" onclick="renameServer(${r.id}, '${(r.name||'').replace(/'/g,"\\'")}')">改名</button>
       <button class="btn btn-danger action" onclick="rotate(${r.id})">重建</button>
       <button class="btn snapshot action" onclick="snapshot(${r.id})">创建快照</button>
@@ -153,7 +162,12 @@ async function loadQB(showToast=false){
   if(showToast) toast('qB状态已刷新')
 }
 
-async function loadAll(showToast=false){await Promise.all([loadMeta(false),loadData(false),loadDaily(false),loadQB(false)]); if(showToast) toast('全部数据已刷新')}
+async function loadQBNodes(){
+  const r=await fetch('/api/qb_nodes')
+  QB_NODES = await r.json()
+}
+
+async function loadAll(showToast=false){await Promise.all([loadMeta(false),loadQBNodes(),loadData(false),loadDaily(false),loadQB(false)]); if(showToast) toast('全部数据已刷新')}
 
 async function renameServer(id, oldName){
   const n=prompt('请输入新的服务器名称：', oldName||`server-${id}`)
@@ -216,5 +230,39 @@ async function deleteSnapshot(id){
   loadSnapshotsList(); loadMeta()
 }
 
+function openQBModal(serverId){
+  byId('qbModal').classList.remove('hidden')
+  byId('qb_server_id').value = serverId
+  const n = QB_NODES[String(serverId)] || {}
+  byId('qb_url').value = n.url || ''
+  byId('qb_user').value = n.username || ''
+  byId('qb_pass').value = n.password || ''
+}
+function closeQBModal(){ byId('qbModal').classList.add('hidden') }
+
+async function saveQBNode(){
+  const body={
+    server_id:Number(byId('qb_server_id').value),
+    url:byId('qb_url').value.trim(),
+    username:byId('qb_user').value.trim(),
+    password:byId('qb_pass').value,
+  }
+  const r=await fetch('/api/qb_node',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})
+  const d=await r.json()
+  if(!r.ok||!d?.ok){alert(d?.error||d?.detail||'保存失败');return}
+  toast('qB配置已保存并测试通过')
+  closeQBModal(); loadAll(false)
+}
+
+async function deleteQBNode(){
+  const sid=Number(byId('qb_server_id').value)
+  if(!confirm(`确认删除服务器 ${sid} 的qB配置？`)) return
+  const r=await fetch(`/api/qb_node/${sid}`,{method:'DELETE'})
+  const d=await r.json()
+  if(!r.ok||!d?.ok){alert('删除失败');return}
+  toast('qB配置已删除')
+  closeQBModal(); loadAll(false)
+}
+
 byId('kw').addEventListener('input',()=>loadData(false))
-initTheme(); loadAll(false); setInterval(()=>loadData(false),30000)
+initTheme(); loadAll(false); setInterval(()=>loadData(false),5000)
