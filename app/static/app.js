@@ -85,8 +85,13 @@ async function copyText(v){
     }catch(e){ ok=false }
   }
 
-  if(ok) toast(`已复制: ${text}`)
-  else toast(`复制失败，请手动复制: ${text}`)
+  if(ok){
+    toast(`已复制: ${text}`)
+  }else{
+    // Final fallback for Safari/macOS or restricted clipboard contexts
+    window.prompt('当前环境限制自动复制，请手动复制：', text)
+    toast('已打开手动复制框')
+  }
 }
 
 function typeFamily(name=''){return name.replace(/[0-9].*$/,'')}
