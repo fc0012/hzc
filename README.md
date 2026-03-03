@@ -1,54 +1,149 @@
-# Hetzner Traffic Guard
+# HZC - Hetzner Traffic Guard
 
-一个 Docker 化项目：监控 Hetzner 每台 VPS 当月外网出流量，接近阈值时自动快照+重建+删除旧机；并提供 Web 面板与 Telegram 通知。
-
-## 一键使用（推荐）
-```bash
-git clone https://github.com/liqiba/hzc.git
-cd hzc
-bash scripts/onekey.sh
-```
-
-脚本会交互式让你填写：
-- Hetzner API Token
-- Telegram Bot Token / Chat ID（可选）
-- 阈值和检测间隔
-
-启动后访问：`http://<你的服务器IP>:1227`
+一个给 Hetzner 用户做“流量可视化 + 安全自动化”的小白友好项目。  
+目标：**开箱即用、默认安全、出问题可定位**。
 
 ---
 
-## 功能
-- 每 `CHECK_INTERVAL_MINUTES` 分钟检测流量
-- 极简安全模式（`SAFE_MODE=true`）下：仅告警，不自动删机
-- 关闭安全模式后：超阈值（`ROTATE_THRESHOLD`）自动轮换服务器
-- Web 面板展示每台机器流量占比，支持手动重建
-- Telegram 通知轮换结果
+## 1) 项目公开状态（你刚提的第1点）
 
-## 手动方式
+我已尝试通过 API 直接把仓库改成 Public，但当前凭据权限不足（返回 403）。
+
+你在 GitHub 点两下就能完成：
+
+1. 打开仓库：`https://github.com/liqiba/hzc`
+2. `Settings` → `General` → 拉到最底部 `Danger Zone`
+3. `Change repository visibility` → `Make public`
+
+> 完成后，任何人都可以 `git clone` 拉取安装。
+
+---
+
+## 2) 小白 10 分钟上手（推荐）
+
+> 只需要：一台 Linux 服务器 + Docker + Hetzner API Token
+
+### 第一步：拉代码
+
+```bash
+git clone https://github.com/liqiba/hzc.git
+cd hzc
+```
+
+### 第二步：一键安装向导
+
+```bash
+bash scripts/onekey.sh
+```
+
+你只需要先填一个必填项：
+- `HETZNER_TOKEN`
+
+其他都可以先回车跳过（后续再补）。
+
+### 第三步：打开面板
+
+```text
+http://你的服务器IP:1227
+```
+
+---
+
+## 3) 默认安全逻辑（已简化）
+
+项目默认是**保守模式**：
+
+- `SAFE_MODE=true`：只告警，不自动删机
+- `ROTATE_THRESHOLD=0.98`：接近阈值才触发
+- `CHECK_INTERVAL_MINUTES=5`：每 5 分钟检测一次
+
+这意味着：
+- 新手可以先观察，不会误删
+- 看明白后再关闭 SAFE_MODE 开自动化
+
+---
+
+## 4) 功能清单（当前可用）
+
+- 服务器列表（状态、IP、规格、流量）
+- 已用流量与 24h 流量（真实值，不再粗暴显示 0）
+- 每日流量柱状图（悬浮即显详情）
+- qB 实时/累计/任务数监控（按服务器配置）
+- 快照创建 / 删除 / 重命名
+- 服务器改名、重置密码、手动重建
+- Telegram 命令入口（按配置启用）
+
+---
+
+## 5) qB 小白配置
+
+在 Web 页面每台服务器后面点 **配置qB**：
+
+- URL：`http://IP:8080`
+- 用户名
+- 密码
+
+保存后会自动测试并开始实时显示。
+
+---
+
+## 6) 常见问题（FAQ）
+
+### Q1: 页面是 0 流量，但官方后台有流量？
+
+已修复 Hetzner 新版 metrics 结构兼容。若仍异常：
+
+1. 强刷浏览器（Mac: `Cmd+Shift+R`）
+2. 看容器日志：
+   ```bash
+   docker logs -f hetzner-traffic-guard
+   ```
+
+### Q2: 每日流量图“无数据”？
+
+已改为按小时聚合成日统计，兼容性更好。新数据产生后会自动显示。
+
+### Q3: tooltip 卡顿/位置错位？
+
+已改成即时 tooltip（非浏览器原生 title），并调整显示位置防止溢出。
+
+---
+
+## 7) 手动部署（进阶）
+
 ```bash
 cp .env.example .env
-# 编辑 .env 填写 HETZNER_TOKEN 等
-
+# 编辑 .env
 docker compose up -d --build
 ```
 
-## 关键环境变量
-- `HETZNER_TOKEN`: Hetzner Cloud API Token
-- `TRAFFIC_LIMIT_TB`: 套餐月流量（默认20）
-- `ROTATE_THRESHOLD`: 触发阈值（建议先 0.98）
-- `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`: Telegram 通知
+---
 
-## GitHub 发布
+## 8) 关键环境变量
+
+- `HETZNER_TOKEN`：必填
+- `TRAFFIC_LIMIT_TB`：套餐月流量（默认20）
+- `ROTATE_THRESHOLD`：触发阈值（默认0.98）
+- `CHECK_INTERVAL_MINUTES`：检测间隔（默认5）
+- `SAFE_MODE`：默认 true（只告警）
+- `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`：可选
+
+qB（全局默认，可不填）：
+- `QB_URL`
+- `QB_USERNAME`
+- `QB_PASSWORD`
+
+---
+
+## 9) 升级
+
 ```bash
-git init
-git add .
-git commit -m "init hetzner traffic guard"
-git branch -M main
-git remote add origin git@github.com:<you>/<repo>.git
-git push -u origin main
+git pull
+docker compose up -d --build
 ```
 
-## 注意
-- 自动重建会删除旧机，务必先在测试项目验证。
-- 建议先将 `ROTATE_THRESHOLD` 调高到 `0.98` 做灰度。
+---
+
+## 10) 免责声明
+
+关闭 `SAFE_MODE` 后，自动化动作可能涉及重建与删除，请先在测试环境验证。

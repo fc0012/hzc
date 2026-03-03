@@ -33,19 +33,25 @@ ask() {
 }
 
 echo "== Hetzner Traffic Guard 一键初始化 =="
-ask "HETZNER_TOKEN" "请输入 Hetzner API Token" 1
-ask "TELEGRAM_BOT_TOKEN" "请输入 Telegram Bot Token(可留空)" 1
-ask "TELEGRAM_CHAT_ID" "请输入 Telegram Chat ID(可留空)"
-ask "ROTATE_THRESHOLD" "触发阈值(默认0.98更安全)"
-ask "CHECK_INTERVAL_MINUTES" "检测间隔分钟(默认5)"
-ask "SAFE_MODE" "是否开启极简安全模式(默认true，仅告警不自动删除重建)"
+echo "提示：只填 Hetzner Token 也能跑，其余可回车跳过。"
 
-# 安全默认值
+ask "HETZNER_TOKEN" "请输入 Hetzner API Token(必填)" 1
+if [ -z "$(grep -E '^HETZNER_TOKEN=' .env | head -n1 | cut -d'=' -f2-)" ]; then
+  echo "[x] HETZNER_TOKEN 不能为空"
+  exit 1
+fi
+
+ask "TELEGRAM_BOT_TOKEN" "Telegram Bot Token(可留空)" 1
+ask "TELEGRAM_CHAT_ID" "Telegram Chat ID(可留空)"
+ask "ROTATE_THRESHOLD" "触发阈值(推荐0.98，默认0.98)"
+ask "CHECK_INTERVAL_MINUTES" "检测间隔分钟(默认5)"
+ask "SAFE_MODE" "安全模式(默认true，true=只告警不自动删机)"
+
+# 小白安全默认值
 sed -i 's#^TRAFFIC_LIMIT_TB=.*#TRAFFIC_LIMIT_TB=20#' .env
 if ! grep -q '^ROTATE_THRESHOLD=' .env; then echo 'ROTATE_THRESHOLD=0.98' >> .env; fi
 if ! grep -q '^CHECK_INTERVAL_MINUTES=' .env; then echo 'CHECK_INTERVAL_MINUTES=5' >> .env; fi
 if ! grep -q '^SAFE_MODE=' .env; then echo 'SAFE_MODE=true' >> .env; fi
-
 
 echo "[i] 启动中..."
 docker compose up -d --build
@@ -53,3 +59,4 @@ docker compose up -d --build
 echo "[ok] 已启动"
 echo "访问: http://$(hostname -I | awk '{print $1}'):1227"
 echo "配置文件: $(pwd)/.env"
+echo "查看详细教程：README.md"
