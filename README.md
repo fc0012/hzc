@@ -30,7 +30,7 @@ chmod +x scripts/onekey.sh
 如果提示权限问题，再用：
 
 ```bash
-bash 脚本/onekey.sh
+bash scripts/onekey.sh
 ```
 
 你只需要先填一个必填项：
