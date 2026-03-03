@@ -39,6 +39,20 @@ function renderDailyStats(items){
   }).join('')
 }
 
+function formatIEC(bytes){
+  const n = Number(bytes||0)
+  const units = ['B','KiB','MiB','GiB','TiB','PiB']
+  let v = Math.abs(n), i = 0
+  while(v >= 1024 && i < units.length-1){ v /= 1024; i++ }
+  const sign = n < 0 ? '-' : ''
+  const dec = i <= 1 ? 0 : 2
+  return `${sign}${v.toFixed(dec)} ${units[i]}`
+}
+
+function formatIECps(bytesPerSec){
+  return `${formatIEC(bytesPerSec)}/s`
+}
+
 function rowHtml(r){
   const pct=Math.min(100,(r.ratio||0)*100),warn=r.over_threshold
   const daily=DAILY_MAP[r.id]||[]
@@ -50,7 +64,7 @@ function rowHtml(r){
 
   const q=r.qb||{}
   const qbCell = q.enabled
-    ? `<span>↑ ${(q.up_speed/1024/1024).toFixed(2)} / ↓ ${(q.dl_speed/1024/1024).toFixed(2)} MiB/s</span> · <span class='daily-mini'>↑ ${(q.up_total/1024/1024/1024/1024).toFixed(2)} / ↓ ${(q.dl_total/1024/1024/1024/1024).toFixed(2)} TiB</span>`
+    ? `<span>↑ ${formatIECps(q.up_speed)} / ↓ ${formatIECps(q.dl_speed)}</span> · <span class='daily-mini'>↑ ${formatIEC(q.up_total)} / ↓ ${formatIEC(q.dl_total)} · 任务 ${q.active_torrents||0}/${q.all_torrents||0}</span>`
     : `<span class='daily-mini'>未配置</span>`
 
   return `<tr>
