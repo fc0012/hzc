@@ -58,7 +58,10 @@ class HetznerClient:
         total = 0
         for point in series:
             if len(point) > 1 and point[1] is not None:
-                v = float(point[1])
+                try:
+                    v = float(point[1])
+                except (TypeError, ValueError):
+                    continue
                 total += int(v * step) if mode == "bandwidth" else int(v)
         return total
 
@@ -76,7 +79,10 @@ class HetznerClient:
         out = []
         for p in series:
             if len(p) > 1 and p[1] is not None:
-                v = float(p[1])
+                try:
+                    v = float(p[1])
+                except (TypeError, ValueError):
+                    continue
                 b = int(v * step) if mode == "bandwidth" else int(v)
                 out.append({"date": str(p[0])[:10], "bytes": b})
         return out
