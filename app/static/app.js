@@ -32,10 +32,15 @@ function renderDailyStats(items){
     const today=gb.length?gb[gb.length-1]:0
     const ratio=avg>0?today/avg:1
     const level=ratio>=2?'crit':(ratio>=1.5?'warn':'ok')
-    const bars=gb.slice(-7).map(v=>{const h=Math.max(3,Math.round(v/max*28));const cls=v>=avg*2?'crit':(v>=avg*1.5?'hot':'');return `<i class='${cls}' style='height:${h}px'></i>`}).join('')
-    const recent=daily.slice(-3).map(d=>`${d.date}: ${(d.bytes/1024/1024/1024).toFixed(2)}GB`).join(' · ')
+    const bars=daily.slice(-7).map(d=>{
+      const v=d.bytes/1024/1024/1024
+      const h=Math.max(3,Math.round(v/max*28))
+      const cls=v>=avg*2?'crit':(v>=avg*1.5?'hot':'')
+      const tip=`${d.date}: ${v.toFixed(2)} GB`
+      return `<i class='${cls}' style='height:${h}px' title='${tip}' aria-label='${tip}'></i>`
+    }).join('')
     const badge=level==='ok'?'':`<span class='badge-traffic ${level==='crit'?'badge-crit':'badge-warn'}'>${level==='crit'?'异常峰值':'高于均值'}</span>`
-    return `<div class="daily-item"><b>${s.name}</b>${badge}<div class="spark">${bars}</div><div class="daily-mini">${recent||'无最近数据'}</div></div>`
+    return `<div class="daily-item"><b>${s.name}</b>${badge}<div class="spark">${bars||'<span class="daily-mini">无最近数据</span>'}</div></div>`
   }).join('')
 }
 
