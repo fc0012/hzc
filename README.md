@@ -40,8 +40,16 @@ bash scripts/onekey.sh
 
 ### 第三步：打开面板
 
-```文本
+```text
 http://你的服务器IP:1227
+```
+
+### 第四步（后续升级）：一键升级
+
+```bash
+cd hzc
+chmod +x scripts/upgrade.sh
+./scripts/upgrade.sh
 ```
 
 ---
@@ -134,12 +142,21 @@ qB（全局默认，可不填）：
 
 ---
 
-## 9) 升级
+## 9) 升级（小白一键）
+
+推荐直接执行：
 
 ```bash
-git pull
-docker compose up -d --build
+cd hzc
+chmod +x scripts/upgrade.sh
+./scripts/upgrade.sh
 ```
+
+脚本会自动完成：
+- 拉取最新代码
+- 强制同步到 `origin/main`（覆盖本地代码改动）
+- 重建并重启最新 Docker 容器
+- 显示运行状态
 
 ---
 
