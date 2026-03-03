@@ -72,6 +72,11 @@ async def daily_stats(days: int = 7):
     return await monitor.daily_stats(days=days)
 
 
+@app.get('/api/qb_status')
+async def qb_status():
+    return await monitor.qb_status()
+
+
 @app.post('/api/rotate/{server_id}')
 async def rotate(server_id: int):
     if not settings.hetzner_token:

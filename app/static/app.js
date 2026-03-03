@@ -140,7 +140,20 @@ async function loadData(showToast=false){
   if(showToast) toast('已刷新')
 }
 async function loadDaily(showToast=false){const r=await fetch('/api/daily_stats?days=7');renderDailyStats(await r.json()); if(showToast) toast('统计已刷新')}
-async function loadAll(showToast=false){await Promise.all([loadMeta(false),loadData(false),loadDaily(false)]); if(showToast) toast('全部数据已刷新')}
+
+function fmtSpeed(v){return `${(v/1024/1024).toFixed(2)} MiB/s`}
+function fmtTiB(v){return `${(v/1024/1024/1024/1024).toFixed(2)} TiB`}
+async function loadQB(showToast=false){
+  const r=await fetch('/api/qb_status'); const q=await r.json();
+  if(!q?.enabled){byId('qbCard').innerHTML='未配置 qB 监控'; return}
+  byId('qbCard').innerHTML=`<div><b>${q.connection_status||'unknown'}</b></div>
+  <div class='daily-mini'>累计数据：${fmtTiB(q.up_total||0)} ↑ / ${fmtTiB(q.dl_total||0)} ↓</div>
+  <div class='daily-mini'>实时：${fmtSpeed(q.up_speed||0)} ↑ / ${fmtSpeed(q.dl_speed||0)} ↓</div>
+  <div class='daily-mini'>任务：活跃 ${q.active_torrents||0} / 总计 ${q.all_torrents||0} · DHT ${q.dht_nodes||0}</div>`
+  if(showToast) toast('qB状态已刷新')
+}
+
+async function loadAll(showToast=false){await Promise.all([loadMeta(false),loadData(false),loadDaily(false),loadQB(false)]); if(showToast) toast('全部数据已刷新')}
 
 async function renameServer(id, oldName){
   const n=prompt('请输入新的服务器名称：', oldName||`server-${id}`)

@@ -42,6 +42,7 @@ class TelegramControl:
             {"command": "delete", "description": "删除"},
             {"command": "rebuild", "description": "重建"},
             {"command": "resetpwd", "description": "重置并获取密码"},
+            {"command": "qbstatus", "description": "qB 节点状态"},
         ]
         await self.api("setMyCommands", {"commands": cmds})
 
@@ -72,6 +73,23 @@ class TelegramControl:
             rows = await self.monitor.collect()
             total = sum(r.get("used_tb", 0) for r in rows)
             return await self.send(f"本月总出流量: {total:.2f} TB", chat_id)
+
+        if cmd == "/qbstatus":
+            q = await self.monitor.qb_status()
+            if not q.get("enabled"):
+                return await self.send("qB监控未配置", chat_id)
+            def _fmt_speed(v):
+                return f"{v/1024/1024:.2f} MiB/s"
+            def _fmt_total(v):
+                return f"{v/1024/1024/1024/1024:.2f} TiB"
+            return await self.send(
+                "qB状态\n"
+                f"连接: {q.get('connection_status')}\n"
+                f"实时: ↑ {_fmt_speed(q.get('up_speed',0))} / ↓ {_fmt_speed(q.get('dl_speed',0))}\n"
+                f"累计: ↑ {_fmt_total(q.get('up_total',0))} / ↓ {_fmt_total(q.get('dl_total',0))}\n"
+                f"任务: 活跃 {q.get('active_torrents',0)} / 总计 {q.get('all_torrents',0)}\n"
+                f"DHT: {q.get('dht_nodes',0)}"
+            , chat_id)
 
         if cmd == "/traffic" and len(parts) >= 2:
             return await self.send(await self.monitor.traffic_text(int(parts[1])), chat_id)

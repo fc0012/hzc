@@ -3,6 +3,7 @@ import datetime as dt
 from app.config import settings
 from app.hetzner_client import HetznerClient
 from app.telegram_bot import Tg
+from app.qb_client import QBClient
 
 BYTES_IN_TB = 1024**4
 
@@ -11,6 +12,7 @@ class MonitorService:
     def __init__(self):
         self.client = HetznerClient(settings.hetzner_token)
         self.tg = Tg(settings.telegram_bot_token, settings.telegram_chat_id)
+        self.qb = QBClient(settings.qb_url, settings.qb_username, settings.qb_password)
         self.last_snapshot = []
 
     async def meta(self):
@@ -251,6 +253,9 @@ class MonitorService:
         data = await self.client.rename_server(server_id, name)
         await self.tg.send(f"✏️ Server renamed: {server_id} -> {name}")
         return {"ok": True, "server_id": server_id, "name": name, "raw": data}
+
+    async def qb_status(self):
+        return await self.qb.stats()
 
 
 monitor = MonitorService()
