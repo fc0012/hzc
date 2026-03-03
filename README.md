@@ -19,7 +19,15 @@ git clone https://github.com/liqiba/hzc.git
 cd hzc
 ```
 
-### 第二步：一键安装向导
+### 第二步：一键安装向导（直接复制下面三行）
+
+```bash
+cd hzc
+chmod +x scripts/onekey.sh
+./scripts/onekey.sh
+```
+
+如果提示权限问题，再用：
 
 ```bash
 bash 脚本/onekey.sh
