@@ -26,6 +26,7 @@ class MonitorService:
         except Exception:
             snapshots = []
         return {
+            "app_version": settings.app_version,
             "server_types": [
                 {
                     "name": t.get("name"),

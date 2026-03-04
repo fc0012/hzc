@@ -159,6 +159,7 @@ function renderTypeOptions(){
 
 async function loadMeta(showToast=false){
   const r=await fetch('/api/meta'); META=await r.json()
+  if(byId('appVersion')) byId('appVersion').textContent = META.app_version || '--'
   byId('c_location').innerHTML=META.locations.map(l=>`<option value="${l.name}">${l.name} (${l.city||''})</option>`).join('')
   const fams=[...new Set(META.server_types.map(t=>typeFamily(t.name)).filter(Boolean))].sort()
   byId('f_family').innerHTML=['<option value="">全部系列</option>'].concat(fams.map(f=>`<option value="${f}">${f}</option>`)).join('')
