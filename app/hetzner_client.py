@@ -1,4 +1,5 @@
 import datetime as dt
+from zoneinfo import ZoneInfo
 import httpx
 
 BASE = "https://api.hetzner.cloud/v1"
@@ -87,7 +88,7 @@ class HetznerClient:
         return total
 
     async def get_outbound_daily(self, server_id: int, days: int = 7):
-        # Use hourly step then aggregate by date for better compatibility/data density
+        # Use hourly step then aggregate by UTC date for trend chart
         now = dt.datetime.utcnow().replace(microsecond=0)
         step = 3600
         start = (now - dt.timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -109,6 +110,37 @@ class HetznerClient:
                 d = self._point_date(p[0])
                 agg[d] = agg.get(d, 0) + b
         return [{"date": d, "bytes": agg[d]} for d in sorted(agg.keys())]
+
+    async def get_outbound_today_bytes(self, server_id: int, timezone: str = "UTC") -> int:
+        # Today 00:00 -> now (in configured timezone)
+        tz = ZoneInfo(timezone or "UTC")
+        now_local = dt.datetime.now(tz)
+        start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+        start_utc = start_local.astimezone(dt.timezone.utc)
+        end_utc = now_local.astimezone(dt.timezone.utc)
+
+        step = 300  # 5 min for better precision
+        params = {
+            "type": "network",
+            "start": start_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "end": end_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "step": str(step),
+        }
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.get(f"{BASE}/servers/{server_id}/metrics", headers=self.headers, params=params)
+            r.raise_for_status()
+            data = r.json()
+
+        series, mode = self._pick_outbound_series(data)
+        total = 0
+        for p in series:
+            if len(p) > 1 and p[1] is not None:
+                try:
+                    v = float(p[1])
+                except (TypeError, ValueError):
+                    continue
+                total += int(v * step) if mode == "bandwidth" else int(v)
+        return total
 
     async def create_snapshot(self, server_id: int, description: str):
         payload = {"type": "snapshot", "description": description}

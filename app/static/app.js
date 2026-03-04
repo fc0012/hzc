@@ -13,10 +13,13 @@ function initTheme(){const t=localStorage.getItem('theme')||'dark';document.body
 function renderCards(data){
   const total=data.length,warn=data.filter(x=>x.over_threshold).length
   const used=data.reduce((a,b)=>a+(b.used_tb||0),0).toFixed(2)
+  const todaySumBytes=data.reduce((a,b)=>a+(Number(b.today_bytes||0)),0)
+  const todaySumTb=(todaySumBytes/1024/1024/1024/1024).toFixed(4)
   const avg=total?(data.reduce((a,b)=>a+(b.ratio||0),0)/total*100).toFixed(1):'0.0'
   byId('cards').innerHTML=`<div class="card"><div class="k">服务器总数</div><div class="v">${total}</div></div>
   <div class="card"><div class="k">超阈值数量</div><div class="v">${warn}</div></div>
   <div class="card"><div class="k">总已用流量(TB)</div><div class="v">${used}</div></div>
+  <div class="card"><div class="k">今日流量汇总</div><div class="v">${todaySumTb} TB</div></div>
   <div class="card"><div class="k">平均占比</div><div class="v">${avg}%</div></div>`
 }
 

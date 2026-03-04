@@ -82,12 +82,14 @@ class MonitorService:
             included_tb = (int(s.get("included_traffic") or 0) / BYTES_IN_TB) or settings.traffic_limit_tb
             pct = used_tb / included_tb if included_tb > 0 else 0
             try:
+                today_bytes = await self.client.get_outbound_today_bytes(s["id"], settings.timezone)
+            except Exception:
+                today_bytes = 0
+            try:
                 daily = await self.client.get_outbound_daily(s["id"], days=2)
             except Exception:
                 daily = []
-            today_gb = 0.0
-            if daily:
-                today_gb = (daily[-1].get("bytes", 0) / (1024**3))
+            today_gb = (today_bytes / (1024**3)) if today_bytes else 0.0
             qbs = {"enabled": False}
             t = qb_tasks.get(str(s["id"]))
             if t:
@@ -110,7 +112,7 @@ class MonitorService:
                 "used_gb": round(used_gb, 4),
                 "today_gb": round(today_gb, 4),
                 "used_bytes": int(outbound),
-                "today_bytes": int(daily[-1].get("bytes", 0) if daily else 0),
+                "today_bytes": int(today_bytes),
                 "limit_tb": round(included_tb, 8),
                 "ratio": round(pct, 4),
                 "over_threshold": pct >= float(pol.get("threshold", settings.rotate_threshold)),
