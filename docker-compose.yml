@@ -9,3 +9,5 @@ services:
       - .env
     volumes:
       - ./state:/app/state
+      - ./:/opt/hzc
+      - /var/run/docker.sock:/var/run/docker.sock

@@ -35,7 +35,8 @@ class TelegramControl:
         return {
             "keyboard": [
                 [{"text": "📋 服务器列表"}, {"text": "📊 系统状态"}, {"text": "📈 流量汇总"}],
-                [{"text": "🧊 快照列表"}, {"text": "⚙️ qB状态"}, {"text": "❓帮助"}],
+                [{"text": "🧊 快照列表"}, {"text": "⚙️ qB状态"}, {"text": "🏷️ 版本号"}],
+                [{"text": "🚀 一键升级"}, {"text": "❓帮助"}],
             ],
             "resize_keyboard": True,
             "is_persistent": True,
@@ -57,6 +58,8 @@ class TelegramControl:
             {"command": "rebuild", "description": "重建"},
             {"command": "resetpwd", "description": "重置并获取密码"},
             {"command": "qbstatus", "description": "qB 节点状态"},
+            {"command": "version", "description": "当前项目版本"},
+            {"command": "upgrade", "description": "一键升级到最新版"},
         ]
         await self.api("setMyCommands", {"commands": cmds})
 
@@ -68,6 +71,8 @@ class TelegramControl:
             "📈 流量汇总": "/report",
             "🧊 快照列表": "/snapshots",
             "⚙️ qB状态": "/qbstatus",
+            "🏷️ 版本号": "/version",
+            "🚀 一键升级": "/upgrade",
             "❓帮助": "/help",
         }
         t = quick.get(t, t)
@@ -80,6 +85,7 @@ class TelegramControl:
                 "/list 服务器列表\n/status 系统状态\n/traffic <ID> 流量详情\n/today <ID> 今日流量\n/report 流量汇总\n"
                 "/snapshots 快照列表\n/createsnapshot <ID> [confirm] 创建快照\n/createfromsnapshot <snapshot_id> <type> <location> <name>\n"
                 "/startserver <ID> /stopserver <ID> /reboot <ID>\n/delete <ID> confirm /rebuild <ID> <snapshot_id>\n/resetpwd <ID> 重置并发送新密码\n"
+                "/version 查看版本 /upgrade 一键升级\n"
                 "/scheduleon /scheduleoff /schedulestatus (预留)\n/dnscheck /dnstest (预留)\n\n"
                 "你也可以直接点下方按钮。",
                 chat_id,
@@ -98,6 +104,17 @@ class TelegramControl:
             rows = await self.monitor.collect()
             total = sum(r.get("used_tb", 0) for r in rows)
             return await self.send(f"本月总出流量: {total:.2f} TB", chat_id)
+
+        if cmd == "/version":
+            return await self.send(f"当前版本: {settings.app_version}", chat_id)
+
+        if cmd == "/upgrade":
+            await self.send("开始执行一键升级（拉取最新代码并重建容器）...", chat_id)
+            # fire-and-forget: container may restart during this process
+            upgrade_cmd = "nohup bash -lc 'cd /opt/hzc && ./scripts/upgrade.sh' >/tmp/hzc-upgrade.log 2>&1 &"
+            p = await asyncio.create_subprocess_shell(upgrade_cmd)
+            await p.communicate()
+            return await self.send("升级任务已触发。约30-90秒后生效。\n可点【🏷️ 版本号】确认。", chat_id)
 
         if cmd == "/qbstatus":
             rows = await self.monitor.collect()
