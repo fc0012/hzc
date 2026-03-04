@@ -5,6 +5,7 @@ let DAILY_MAP={}
 let QB_NODES={}
 let AUTO_POLICIES={}
 let __rowHtmlCache={}
+let __qbHtmlCache={}
 
 const toast=(msg)=>{const t=byId('toast');t.textContent=msg;t.classList.remove('hidden');clearTimeout(window.__toastT);window.__toastT=setTimeout(()=>t.classList.add('hidden'),2200)}
 
@@ -87,6 +88,21 @@ function policyImageLabel(imageId){
   return v
 }
 
+function qbCellHtml(q={}){
+  return q.enabled
+    ? `<div class='qb-line'>
+         <span class='qb-col'>↑ ${formatIECps(q.up_speed)}</span>
+         <span class='qb-col'>↓ ${formatIECps(q.dl_speed)}</span>
+         <span class='qb-col'>任务 ${q.active_torrents||0}/${q.all_torrents||0}</span>
+       </div>
+       <div class='qb-line daily-mini'>
+         <span class='qb-col'>↑ ${formatIEC(q.up_total)}</span>
+         <span class='qb-col'>↓ ${formatIEC(q.dl_total)}</span>
+         <span class='qb-col'>${q.connection_status||'unknown'}</span>
+       </div>`
+    : `<span class='daily-mini'>未配置</span>`
+}
+
 function rowHtml(r){
   const pct=Math.min(100,(r.ratio||0)*100),warn=r.over_threshold
   const todayPct = ((Number(r.today_bytes||0) / (Number(r.limit_tb||20)*1024*1024*1024*1024)) * 100)
@@ -101,18 +117,7 @@ function rowHtml(r){
   const usedPct = Math.min(100, ((Number(r.used_tb||0) / Number(r.limit_tb||20)) * 100))
   const hue = Math.max(0, 220 - Math.round(usedPct*2.2))
   const usedCell = `<div class="ratio-text">${usedPct.toFixed(1)}%</div><div class="progress progress-mini" title="${usedPct.toFixed(1)}%"><div class="bar" style="width:${usedPct}%;background:hsl(${hue} 85% 50%)"></div></div><div class="daily-mini">${formatTBPrecise(r.used_tb)} / ${formatTBPrecise(r.limit_tb)}</div>`
-  const qbCell = q.enabled
-    ? `<div class='qb-line'>
-         <span class='qb-col'>↑ ${formatIECps(q.up_speed)}</span>
-         <span class='qb-col'>↓ ${formatIECps(q.dl_speed)}</span>
-         <span class='qb-col'>任务 ${q.active_torrents||0}/${q.all_torrents||0}</span>
-       </div>
-       <div class='qb-line daily-mini'>
-         <span class='qb-col'>↑ ${formatIEC(q.up_total)}</span>
-         <span class='qb-col'>↓ ${formatIEC(q.dl_total)}</span>
-         <span class='qb-col'>${q.connection_status||'unknown'}</span>
-       </div>`
-    : `<span class='daily-mini'>未配置</span>`
+  const qbCell = qbCellHtml(q)
 
   return `<tr data-id="${r.id}">
     <td><span title="点击复制ID" onclick="copyText('${r.id}')" style="cursor:pointer">${r.id}</span></td>
@@ -120,7 +125,7 @@ function rowHtml(r){
     <td>${r.server_type || '-'} · ${r.cores||0}C/${r.memory_gb||0}GB/${r.disk_gb||0}GB</td>
     <td>${r.ip||''}</td>
     <td><span class="badge ${r.status==='running'?'running':'other'}">${r.status}</span></td>
-    <td>${qbCell}</td>
+    <td class="qb-cell" data-id="${r.id}">${qbCell}</td>
     <td>${usedCell}</td><td>${todayCell}</td>
     <td><div class="op-row">
       <button class="btn action" onclick="openQBModal(${r.id})">配置qB</button>
@@ -244,6 +249,28 @@ async function loadData(showToast=false){
     if(showToast) toast('已刷新')
   } finally { __loadingData=false }
 }
+
+let __loadingQB=false
+async function loadQBRealtime(){
+  if(__loadingQB) return
+  __loadingQB=true
+  try{
+    const r=await fetch('/api/qb_realtime')
+    const data=await r.json()
+    const tbody=byId('tb')?.querySelector('tbody')
+    if(!tbody) return
+    for(const [sid,q] of Object.entries(data||{})){
+      const cell=tbody.querySelector(`td.qb-cell[data-id="${sid}"]`)
+      if(!cell) continue
+      const html=qbCellHtml(q)
+      if(__qbHtmlCache[sid]!==html){
+        cell.innerHTML=html
+        __qbHtmlCache[sid]=html
+      }
+    }
+  } catch(e){} finally { __loadingQB=false }
+}
+
 async function loadDaily(showToast=false){const r=await fetch('/api/daily_stats?days=7');renderDailyStats(await r.json()); if(showToast) toast('统计已刷新')}
 
 async function loadQBNodes(){
@@ -280,6 +307,7 @@ async function toggleSafeMode(){
 
 async function loadAll(showToast=false){
   await Promise.all([loadMeta(false),loadQBNodes(),loadAutoPolicies(),loadData(false),loadSafeMode()])
+  loadQBRealtime()
   // defer heavy chart data to improve first paint smoothness
   setTimeout(()=>loadDaily(false), 0)
   if(showToast) toast('全部数据已刷新')
@@ -536,7 +564,8 @@ async function deleteQBNode(){
 byId('kw').addEventListener('input',()=>loadData(false))
 initTheme();
 loadAll(false)
-// layered refresh: fast table, slower charts/meta
-setInterval(()=>{ if(!document.hidden) loadData(false) }, 9000)
+// layered refresh: qB high-frequency, others lower frequency
+setInterval(()=>{ if(!document.hidden) loadQBRealtime() }, 3000)
+setInterval(()=>{ if(!document.hidden) loadData(false) }, 15000)
 setInterval(()=>{ if(!document.hidden) loadDaily(false) }, 60000)
 setInterval(()=>{ if(!document.hidden) loadMeta(false) }, 300000)

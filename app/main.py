@@ -119,6 +119,11 @@ async def qb_nodes():
     return monitor.qb_nodes()
 
 
+@app.get('/api/qb_realtime')
+async def qb_realtime():
+    return await monitor.qb_realtime()
+
+
 @app.post('/api/qb_node')
 async def qb_node_set(req: QBNodeReq):
     return await monitor.qb_node_set(req.server_id, req.url, req.username, req.password)

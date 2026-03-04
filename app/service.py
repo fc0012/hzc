@@ -368,6 +368,21 @@ class MonitorService:
     async def qb_status(self):
         return await self.qb.stats()
 
+    async def qb_realtime(self):
+        nodes = self.qb_store.get_all()
+        tasks = {}
+        for sid, node in nodes.items():
+            tasks[str(sid)] = asyncio.create_task(
+                QBClient.fetch_stats(node.get("url", ""), node.get("username", ""), node.get("password", ""))
+            )
+        out = {}
+        for sid, t in tasks.items():
+            try:
+                out[sid] = await t
+            except Exception as e:
+                out[sid] = {"enabled": True, "error": str(e)}
+        return out
+
     def qb_nodes(self):
         return self.qb_store.get_all()
 
