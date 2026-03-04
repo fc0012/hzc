@@ -5,16 +5,11 @@ cd "$(dirname "$0")/.."
 
 echo "== HZC 一键升级 =="
 
-if ! command -v docker >/dev/null 2>&1; then
-  echo "[x] docker 未安装，请先安装 Docker。"
-  exit 1
-fi
-
 COMPOSE_CMD=""
-if docker compose version >/dev/null 2>&1; then
-  COMPOSE_CMD="docker compose"
-elif command -v docker-compose >/dev/null 2>&1; then
+if command -v docker-compose >/dev/null 2>&1; then
   COMPOSE_CMD="docker-compose"
+elif command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+  COMPOSE_CMD="docker compose"
 else
   echo "[x] docker compose / docker-compose 不可用。"
   exit 1
