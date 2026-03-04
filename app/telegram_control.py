@@ -60,7 +60,7 @@ class TelegramControl:
             "keyboard": [
                 [{"text": "📋 服务器列表"}, {"text": "📊 系统状态"}, {"text": "📈 流量汇总"}],
                 [{"text": "🧊 快照列表"}, {"text": "⚙️ qB状态"}, {"text": "🏷️ 版本号"}],
-                [{"text": "🚀 一键升级"}, {"text": "❓帮助"}],
+                [{"text": "🛡️ 安全开关"}, {"text": "🚀 一键升级"}, {"text": "❓帮助"}],
             ],
             "resize_keyboard": True,
             "is_persistent": True,
@@ -84,6 +84,9 @@ class TelegramControl:
             {"command": "qbstatus", "description": "qB 节点状态"},
             {"command": "version", "description": "当前项目版本"},
             {"command": "upgrade", "description": "一键升级到最新版"},
+            {"command": "safeon", "description": "开启安全模式"},
+            {"command": "safeoff", "description": "关闭安全模式"},
+            {"command": "safestatus", "description": "查看安全模式状态"},
         ]
         await self.api("setMyCommands", {"commands": cmds})
 
@@ -96,6 +99,7 @@ class TelegramControl:
             "🧊 快照列表": "/snapshots",
             "⚙️ qB状态": "/qbstatus",
             "🏷️ 版本号": "/version",
+            "🛡️ 安全开关": "/safestatus",
             "🚀 一键升级": "/upgrade",
             "❓帮助": "/help",
         }
@@ -110,6 +114,7 @@ class TelegramControl:
                 "/snapshots 快照列表\n/createsnapshot <ID> [confirm] 创建快照\n/createfromsnapshot <snapshot_id> <type> <location> <name>\n"
                 "/startserver <ID> /stopserver <ID> /reboot <ID>\n/delete <ID> confirm /rebuild <ID> <snapshot_id>\n/resetpwd <ID> 重置并发送新密码\n"
                 "/version 查看版本 /upgrade 一键升级\n"
+                "/safeon /safeoff /safestatus 安全模式开关\n"
                 "/scheduleon /scheduleoff /schedulestatus (预留)\n/dnscheck /dnstest (预留)\n\n"
                 "你也可以直接点下方按钮。",
                 chat_id,
@@ -139,6 +144,18 @@ class TelegramControl:
             p = await asyncio.create_subprocess_shell(upgrade_cmd)
             await p.communicate()
             return await self.send("升级任务已触发。约30-90秒后生效。\n可点【🏷️ 版本号】确认。", chat_id)
+
+        if cmd == "/safeon":
+            self.monitor.set_safe_mode(True)
+            return await self.send("已开启 SAFE_MODE（仅告警，不自动执行重建）", chat_id)
+
+        if cmd == "/safeoff":
+            self.monitor.set_safe_mode(False)
+            return await self.send("已关闭 SAFE_MODE（自动策略可执行）", chat_id)
+
+        if cmd == "/safestatus":
+            sm = self.monitor.get_safe_mode()
+            return await self.send(f"当前 SAFE_MODE: {'ON' if sm else 'OFF'}", chat_id)
 
         if cmd == "/qbstatus":
             rows = await self.monitor.collect()

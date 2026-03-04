@@ -19,6 +19,7 @@
       <button class="btn" onclick="loadAll(true)">刷新</button>
       <button class="btn" onclick="openCreateModal()">+ 创建服务器</button>
       <button class="btn" onclick="openSnapshotsModal()">快照管理</button>
+      <button class="btn" id="safeModeBtn" onclick="toggleSafeMode()">SAFE_MODE</button>
       <button class="btn" onclick="openTGModal()">TG配置</button>
       <button class="btn ghost" id="themeBtn" onclick="toggleTheme()">☀️ 浅色</button>
     </div>
@@ -111,7 +112,7 @@
       <h3>重建服务器（使用已有快照）</h3>
       <div class="grid">
         <label>服务器ID<input id="rebuild_server_id" readonly /></label>
-        <label>选择快照<select id="rebuild_snapshot"></select></label>
+        <label>选择镜像/快照<select id="rebuild_snapshot"></select></label>
       </div>
       <div class="hint" style="margin-top:8px">说明：原地重建，不自动创建新快照，保留原服务器IP。</div>
       <div class="modal-actions">

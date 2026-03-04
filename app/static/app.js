@@ -205,7 +205,25 @@ async function loadAutoPolicies(){
   AUTO_POLICIES = await r.json()
 }
 
-async function loadAll(showToast=false){await Promise.all([loadMeta(false),loadQBNodes(),loadAutoPolicies(),loadData(false),loadDaily(false)]); if(showToast) toast('全部数据已刷新')}
+async function loadSafeMode(){
+  const r=await fetch('/api/safe_mode')
+  const d=await r.json()
+  const on=!!d.safe_mode
+  const b=byId('safeModeBtn')
+  if(b) b.textContent = on ? 'SAFE_MODE: ON' : 'SAFE_MODE: OFF'
+}
+
+async function toggleSafeMode(){
+  const r0=await fetch('/api/safe_mode'); const d0=await r0.json(); const next=!d0.safe_mode
+  if(!confirm(`确认将 SAFE_MODE 切换为 ${next?'ON':'OFF'} ?`)) return
+  const r=await fetch(`/api/safe_mode?enabled=${next}`,{method:'PUT'})
+  const d=await r.json()
+  if(!r.ok||!d?.ok){alert(d?.detail||d?.error||'切换失败');return}
+  toast(`SAFE_MODE 已切换为 ${next?'ON':'OFF'}`)
+  loadSafeMode()
+}
+
+async function loadAll(showToast=false){await Promise.all([loadMeta(false),loadQBNodes(),loadAutoPolicies(),loadData(false),loadDaily(false),loadSafeMode()]); if(showToast) toast('全部数据已刷新')}
 
 async function renameServer(id, oldName){
   const n=prompt('请输入新的服务器名称：', oldName||`server-${id}`)
@@ -254,17 +272,22 @@ function openRebuildModal(serverId){
   byId('rebuildModal').classList.remove('hidden')
   byId('rebuild_server_id').value=serverId
   const snaps=(META.snapshots||[])
-  byId('rebuild_snapshot').innerHTML = snaps.length
-    ? snaps.map(s=>`<option value="${s.id}">#${s.id} ${s.name||''} (${s.size_gb||0}GB)</option>`).join('')
-    : '<option value="">暂无可用快照</option>'
+  const official=[
+    {id:'debian-12',name:'官方镜像 Debian 12'},
+    {id:'ubuntu-24.04',name:'官方镜像 Ubuntu 24.04'},
+    {id:'ubuntu-22.04',name:'官方镜像 Ubuntu 22.04'},
+  ]
+  const optsOfficial=official.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')
+  const optsSnap=snaps.map(s=>`<option value="${s.id}">快照 #${s.id} ${s.name||''} (${s.size_gb||0}GB)</option>`).join('')
+  byId('rebuild_snapshot').innerHTML = optsOfficial + optsSnap
 }
 function closeRebuildModal(){ byId('rebuildModal').classList.add('hidden') }
 
 async function submitRebuild(){
   const sid=Number(byId('rebuild_server_id').value)
-  const imageId=Number(byId('rebuild_snapshot').value)
-  if(!imageId){alert('请先选择已有快照');return}
-  if(!confirm(`二次确认：将使用快照 #${imageId} 原地重建服务器 ${sid}（保留IP），继续吗？`)) return
+  const imageId=byId('rebuild_snapshot').value
+  if(!imageId){alert('请先选择镜像或快照');return}
+  if(!confirm(`二次确认：将使用 ${imageId} 原地重建服务器 ${sid}（保留IP），继续吗？`)) return
   const verify = prompt('请输入 REBUILD 确认执行：','')
   if((verify||'').trim().toUpperCase() !== 'REBUILD'){ alert('未确认，已取消'); return }
   const r=await fetch(`/api/rebuild/${sid}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({image_id:imageId})})

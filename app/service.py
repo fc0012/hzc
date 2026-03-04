@@ -6,6 +6,7 @@ from app.telegram_bot import Tg
 from app.qb_client import QBClient
 from app.qb_store import QBStore
 from app.auto_policy_store import AutoPolicyStore
+from app.runtime_config import RuntimeConfig
 
 # Keep same unit behavior as Hetzner panel (binary TiB, though UI labels TB)
 BYTES_IN_TB = 1024**4
@@ -18,6 +19,7 @@ class MonitorService:
         self.qb = QBClient(settings.qb_url, settings.qb_username, settings.qb_password)
         self.qb_store = QBStore(settings.qb_store_path)
         self.auto_policy = AutoPolicyStore(settings.auto_policy_path)
+        self.runtime = RuntimeConfig(settings.runtime_config_path)
         self.last_snapshot = []
 
     async def meta(self):
@@ -119,22 +121,33 @@ class MonitorService:
         self.last_snapshot = rows
         return rows
 
+    def get_safe_mode(self):
+        rc = self.runtime.get()
+        if "safe_mode" in rc:
+            return bool(rc.get("safe_mode"))
+        return bool(settings.safe_mode)
+
+    def set_safe_mode(self, enabled: bool):
+        self.runtime.update({"safe_mode": bool(enabled)})
+        return {"ok": True, "safe_mode": bool(enabled)}
+
     async def rotate_if_needed(self):
         rows = await self.collect()
+        safe_mode = self.get_safe_mode()
         for row in rows:
             pol = row.get("auto_policy") or {}
             enabled = bool(pol.get("enabled", False))
             if not enabled:
                 continue
             if row["over_threshold"]:
-                if settings.safe_mode:
+                if safe_mode:
                     await self.tg.send(f"⚠️ SAFE_MODE 告警: {row['name']} 达到自动阈值 {pol.get('threshold', settings.rotate_threshold)}，仅通知不执行")
                     continue
                 image_id = pol.get("image_id")
                 if not image_id:
-                    await self.tg.send(f"⚠️ {row['name']} 达到阈值，但未配置重建快照ID，已跳过")
+                    await self.tg.send(f"⚠️ {row['name']} 达到阈值，但未配置重建镜像/快照，已跳过")
                     continue
-                await self.rebuild_with_snapshot_manual(row["id"], int(image_id))
+                await self.rebuild_with_snapshot_manual(row["id"], image_id)
 
     async def rotate_server(self, server_id: int):
         servers = await self.client.list_servers()
@@ -322,11 +335,12 @@ class MonitorService:
             "poweron_action": (on or {}).get("action", on),
         }
 
-    async def rebuild_with_snapshot_manual(self, server_id: int, image_id: int):
-        # Rebuild in-place: keep same server object (and public IP), do NOT auto-create new snapshot
-        res = await self.client.server_action(server_id, 'rebuild', {'image': int(image_id)})
-        await self.tg.send(f"♻️ 重建已提交\n服务器ID: {server_id}\n快照ID: {image_id}\n说明: 原地重建，保留原服务器IP")
-        return {"ok": True, "server_id": server_id, "image_id": int(image_id), "action": res.get("action", res)}
+    async def rebuild_with_snapshot_manual(self, server_id: int, image_id):
+        # Rebuild in-place: keep same server object (and public IP), image can be snapshot_id or official image name
+        image = int(image_id) if str(image_id).isdigit() else str(image_id)
+        res = await self.client.server_action(server_id, 'rebuild', {'image': image})
+        await self.tg.send(f"♻️ 重建已提交\n服务器ID: {server_id}\n镜像/快照: {image}\n说明: 原地重建，保留原服务器IP")
+        return {"ok": True, "server_id": server_id, "image_id": image, "action": res.get("action", res)}
 
     async def rename_server_manual(self, server_id: int, name: str):
         data = await self.client.rename_server(server_id, name)

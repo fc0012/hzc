@@ -45,7 +45,7 @@ class QBNodeReq(BaseModel):
 
 
 class RebuildReq(BaseModel):
-    image_id: int
+    image_id: int | str
 
 
 class TelegramConfigReq(BaseModel):
@@ -161,6 +161,16 @@ async def rebuild(server_id: int, req: RebuildReq):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
     return await monitor.rebuild_with_snapshot_manual(server_id, req.image_id)
+
+
+@app.get('/api/safe_mode')
+async def safe_mode_get():
+    return {"safe_mode": monitor.get_safe_mode()}
+
+
+@app.put('/api/safe_mode')
+async def safe_mode_set(enabled: bool):
+    return monitor.set_safe_mode(enabled)
 
 
 @app.get('/api/snapshot_estimate/{server_id}')
