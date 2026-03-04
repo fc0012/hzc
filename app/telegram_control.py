@@ -60,7 +60,8 @@ class TelegramControl:
             "keyboard": [
                 [{"text": "📋 服务器列表"}, {"text": "📊 系统状态"}, {"text": "📈 流量汇总"}],
                 [{"text": "🧊 快照列表"}, {"text": "⚙️ qB状态"}, {"text": "🏷️ 版本号"}],
-                [{"text": "🛡️ 安全开关"}, {"text": "🚀 一键升级"}, {"text": "❓帮助"}],
+                [{"text": "🛡️ 安全开关"}, {"text": "🚀 一键升级"}, {"text": "📜 升级日志"}],
+                [{"text": "❓帮助"}],
             ],
             "resize_keyboard": True,
             "is_persistent": True,
@@ -84,6 +85,7 @@ class TelegramControl:
             {"command": "qbstatus", "description": "qB 节点状态"},
             {"command": "version", "description": "当前项目版本"},
             {"command": "upgrade", "description": "一键升级到最新版"},
+            {"command": "upgradelog", "description": "查看最近升级日志"},
             {"command": "safeon", "description": "开启安全模式"},
             {"command": "safeoff", "description": "关闭安全模式"},
             {"command": "safestatus", "description": "查看安全模式状态"},
@@ -101,6 +103,7 @@ class TelegramControl:
             "🏷️ 版本号": "/version",
             "🛡️ 安全开关": "/safestatus",
             "🚀 一键升级": "/upgrade",
+            "📜 升级日志": "/upgradelog",
             "❓帮助": "/help",
         }
         t = quick.get(t, t)
@@ -113,7 +116,7 @@ class TelegramControl:
                 "/list 服务器列表\n/status 系统状态\n/traffic <ID> 流量详情\n/today <ID> 今日流量\n/report 流量汇总\n"
                 "/snapshots 快照列表\n/createsnapshot <ID> [confirm] 创建快照\n/createfromsnapshot <snapshot_id> <type> <location> <name>\n"
                 "/startserver <ID> /stopserver <ID> /reboot <ID>\n/delete <ID> confirm /rebuild <ID> <snapshot_id>\n/resetpwd <ID> 重置并发送新密码\n"
-                "/version 查看版本 /upgrade 一键升级\n"
+                "/version 查看版本 /upgrade 一键升级 /upgradelog 升级日志\n"
                 "/safeon /safeoff /safestatus 安全模式开关\n"
                 "/scheduleon /scheduleoff /schedulestatus (预留)\n/dnscheck /dnstest (预留)\n\n"
                 "你也可以直接点下方按钮。",
@@ -144,6 +147,14 @@ class TelegramControl:
             p = await asyncio.create_subprocess_shell(upgrade_cmd)
             await p.communicate()
             return await self.send("升级任务已触发。约30-90秒后生效。\n可点【🏷️ 版本号】确认。", chat_id)
+
+        if cmd == "/upgradelog":
+            p = await asyncio.create_subprocess_shell("bash -lc 'tail -n 60 /tmp/hzc-upgrade.log 2>/dev/null || echo no-log'", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            out, _ = await p.communicate()
+            txt = (out.decode("utf-8", errors="ignore") or "no-log").strip()
+            ok = "[ok] 升级完成" in txt
+            status = "✅ 最近一次升级状态：成功" if ok else "⚠️ 最近一次升级状态：未确认成功（请查看日志）"
+            return await self.send(f"{status}\n\n<code>{txt[-3200:]}</code>", chat_id)
 
         if cmd == "/safeon":
             self.monitor.set_safe_mode(True)
