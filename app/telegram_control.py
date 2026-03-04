@@ -143,14 +143,19 @@ class TelegramControl:
         if cmd == "/upgrade":
             await self.send("开始执行一键升级（拉取最新代码并重建容器）...", chat_id)
             # run upgrade in a dedicated helper container to avoid self-termination
+            # image name may vary (hzc_... or hzc-...), so detect from running container first
             upgrade_cmd = (
-                "bash -lc 'docker run -d --name hzc-upgrader-$(date +%s) --rm "
+                "bash -lc 'mkdir -p /opt/hzc/state; "
+                "IMG=$(docker inspect -f \"{{.Config.Image}}\" hetzner-traffic-guard 2>/dev/null || echo hzc_hetzner-traffic-guard:latest); "
+                "docker run -d --name hzc-upgrader-$(date +%s) --rm "
                 "-v /opt/hzc:/opt/hzc -v /var/run/docker.sock:/var/run/docker.sock "
-                "hzc_hetzner-traffic-guard:latest "
-                "bash -lc \"cd /opt/hzc && ./scripts/upgrade.sh > /opt/hzc/state/upgrade.log 2>&1\"'"
+                "$IMG bash -lc \"cd /opt/hzc && ./scripts/upgrade.sh > /opt/hzc/state/upgrade.log 2>&1\"'"
             )
             p = await asyncio.create_subprocess_shell(upgrade_cmd)
-            await p.communicate()
+            out, err = await p.communicate()
+            if p.returncode != 0:
+                msg = (err.decode("utf-8", errors="ignore") if err else "")[-500:]
+                return await self.send(f"升级任务触发失败：{msg or 'unknown error'}", chat_id)
             return await self.send("升级任务已触发。约30-90秒后生效。\n可点【🏷️ 版本号】确认。", chat_id)
 
         if cmd == "/upgradelog":
