@@ -32,6 +32,10 @@ class MonitorService:
             snapshots = await self.client.list_snapshots()
         except Exception:
             snapshots = []
+        try:
+            pips = await self.client.list_primary_ips()
+        except Exception:
+            pips = []
         return {
             "app_version": settings.app_version,
             "server_types": [
@@ -53,6 +57,24 @@ class MonitorService:
                     "created": i.get("created"),
                 }
                 for i in snapshots
+            ],
+            "primary_ipv4s": [
+                {
+                    "id": p.get("id"),
+                    "ip": p.get("ip"),
+                    "name": p.get("name") or f"ip-{p.get('id')}",
+                }
+                for p in pips
+                if p.get("type") == "ipv4" and not p.get("assignee")
+            ],
+            "primary_ipv6s": [
+                {
+                    "id": p.get("id"),
+                    "ip": p.get("ip"),
+                    "name": p.get("name") or f"ip-{p.get('id')}",
+                }
+                for p in pips
+                if p.get("type") == "ipv6" and not p.get("assignee")
             ],
         }
 
@@ -257,8 +279,15 @@ class MonitorService:
         await self.tg.send(f"⚠️ 服务器 {server_id} 已触发重置密码，但未在响应中拿到明文密码，请到 Hetzner Console 查看 Action 结果。")
         return {"ok": True, "server_id": server_id, "new_password": None, "note": "password not returned by api response"}
 
-    async def create_server_manual(self, name: str, server_type: str, location: str, image):
-        created = await self.client.create_server(name=name, server_type=server_type, location=location, image=image)
+    async def create_server_manual(self, name: str, server_type: str, location: str, image, primary_ip_id: int | None = None, primary_ipv6_id: int | None = None):
+        created = await self.client.create_server(
+            name=name,
+            server_type=server_type,
+            location=location,
+            image=image,
+            primary_ip_id=primary_ip_id,
+            primary_ipv6_id=primary_ipv6_id,
+        )
         srv = created.get("server", {})
         sid = srv.get("id")
         sname = srv.get("name", name)

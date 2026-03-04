@@ -36,6 +36,8 @@ class CreateServerReq(BaseModel):
     server_type: str
     location: str
     image: str | int
+    primary_ip_id: int | None = None
+    primary_ipv6_id: int | None = None
 
 
 class SnapshotReq(BaseModel):
@@ -217,7 +219,14 @@ async def snapshot(server_id: int, req: SnapshotReq | None = None):
 async def create_server(req: CreateServerReq):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
-    return await monitor.create_server_manual(name=req.name, server_type=req.server_type, location=req.location, image=req.image)
+    return await monitor.create_server_manual(
+        name=req.name,
+        server_type=req.server_type,
+        location=req.location,
+        image=req.image,
+        primary_ip_id=req.primary_ip_id,
+        primary_ipv6_id=req.primary_ipv6_id,
+    )
 
 
 @app.delete('/api/snapshot/{image_id}')

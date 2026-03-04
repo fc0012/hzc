@@ -183,13 +183,20 @@ class HetznerClient:
             r.raise_for_status()
             return r.json()
 
-    async def create_server(self, *, name: str, server_type: str, location: str, image):
+    async def create_server(self, *, name: str, server_type: str, location: str, image, primary_ip_id: int | None = None, primary_ipv6_id: int | None = None):
         payload = {
             "name": name,
             "server_type": server_type,
             "location": location,
             "image": image,
         }
+        if primary_ip_id is not None or primary_ipv6_id is not None:
+            public_net = {"enable_ipv4": True, "enable_ipv6": True}
+            if primary_ip_id is not None:
+                public_net["ipv4"] = int(primary_ip_id)
+            if primary_ipv6_id is not None:
+                public_net["ipv6"] = int(primary_ipv6_id)
+            payload["public_net"] = public_net
         async with httpx.AsyncClient(timeout=30) as c:
             r = await c.post(f"{BASE}/servers", headers=self.headers, json=payload)
             r.raise_for_status()

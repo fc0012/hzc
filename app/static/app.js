@@ -218,6 +218,10 @@ async function loadMeta(showToast=false){
   byId('f_family').innerHTML=['<option value="">全部系列</option>'].concat(fams.map(f=>`<option value="${f}">${f}</option>`)).join('')
   const snaps=(META.snapshots||[]).map(s=>`<option value="${s.id}">snapshot#${s.id} - ${s.name||''} (${s.size_gb||0}GB)</option>`)
   byId('c_image').innerHTML=['<option value="debian-12">debian-12 (官方镜像)</option>'].concat(snaps).join('')
+  const p4=(META.primary_ipv4s||[])
+  const p6=(META.primary_ipv6s||[])
+  byId('c_primary_ip').innerHTML=['<option value="">自动分配IPv4</option>'].concat(p4.map(p=>`<option value="${p.id}">${p.ip}${p.name?` (${p.name})`:''}</option>`)).join('')
+  byId('c_primary_ipv6').innerHTML=['<option value="">自动分配IPv6</option>'].concat(p6.map(p=>`<option value="${p.id}">${p.ip}${p.name?` (${p.name})`:''}</option>`)).join('')
   byId('c_location').onchange=()=>{renderTypeOptions();showTypePrice()}
   byId('c_type').onchange=showTypePrice
   byId('f_cores').onchange=renderTypeOptions
@@ -453,7 +457,7 @@ async function saveTGConfig(restartAfter=false){
   }
   closeTGModal()
 }
-async function submitCreate(){const body={name:byId('c_name').value||`srv-${Date.now()}`,server_type:byId('c_type').value,location:byId('c_location').value,image:byId('c_image').value};const r=await fetch('/api/create_server',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}),d=await r.json();if(!r.ok){alert(d?.detail||d?.error||'创建失败');return}toast('创建任务已提交');closeCreateModal();loadData()}
+async function submitCreate(){const body={name:byId('c_name').value||`srv-${Date.now()}`,server_type:byId('c_type').value,location:byId('c_location').value,image:byId('c_image').value,primary_ip_id: byId('c_primary_ip').value ? Number(byId('c_primary_ip').value) : null,primary_ipv6_id: byId('c_primary_ipv6').value ? Number(byId('c_primary_ipv6').value) : null};const r=await fetch('/api/create_server',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}),d=await r.json();if(!r.ok){alert(d?.detail||d?.error||'创建失败');return}toast('创建任务已提交');closeCreateModal();loadData()}
 
 function openSnapshotsModal(){
   byId('snapshotsModal').classList.remove('hidden')
