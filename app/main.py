@@ -14,6 +14,17 @@ from app.telegram_control import TelegramControl
 app = FastAPI(title="Hetzner Traffic Guard")
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 app.mount('/static', StaticFiles(directory='app/static'), name='static')
+
+
+@app.middleware("http")
+async def add_perf_headers(request: Request, call_next):
+    resp = await call_next(request)
+    path = request.url.path
+    if path.startswith('/static/'):
+        resp.headers['Cache-Control'] = 'public, max-age=604800, immutable'
+    elif path.startswith('/api/'):
+        resp.headers['Cache-Control'] = 'no-store'
+    return resp
 templates = Jinja2Templates(directory='app/templates')
 
 scheduler = AsyncIOScheduler(timezone=settings.timezone)

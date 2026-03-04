@@ -82,6 +82,12 @@ class MonitorService:
         for sid, node in qb_nodes.items():
             qb_tasks[str(sid)] = asyncio.create_task(QBClient.fetch_stats(node.get("url", ""), node.get("username", ""), node.get("password", "")))
 
+        # parallelize today-bytes metrics to reduce end-to-end latency
+        today_tasks = {}
+        for s in servers:
+            sid = s["id"]
+            today_tasks[sid] = asyncio.create_task(self.client.get_outbound_today_bytes(sid, settings.timezone))
+
         for s in servers:
             # Billing-consistent logic: Hetzner official traffic OUT (external upload only)
             outbound = int(s.get("outgoing_traffic") or 0)
@@ -90,7 +96,7 @@ class MonitorService:
             included_tb = (int(s.get("included_traffic") or 0) / BYTES_IN_TB) or settings.traffic_limit_tb
             pct = used_tb / included_tb if included_tb > 0 else 0
             try:
-                today_bytes = await self.client.get_outbound_today_bytes(s["id"], settings.timezone)
+                today_bytes = await today_tasks[s["id"]]
             except Exception:
                 today_bytes = 0
             try:

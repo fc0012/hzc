@@ -504,4 +504,9 @@ async function deleteQBNode(){
 }
 
 byId('kw').addEventListener('input',()=>loadData(false))
-initTheme(); loadAll(false); setInterval(()=>loadData(false),8000)
+initTheme();
+loadAll(false)
+// layered refresh: fast table, slower charts/meta
+setInterval(()=>{ if(!document.hidden) loadData(false) }, 9000)
+setInterval(()=>{ if(!document.hidden) loadDaily(false) }, 60000)
+setInterval(()=>{ if(!document.hidden) loadMeta(false) }, 300000)
