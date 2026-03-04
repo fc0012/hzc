@@ -12,8 +12,10 @@ body{margin:0;color:var(--text);background:var(--bg);font-family:Inter,Arial,san
 #safeModeBtn{min-width:96px}
 #safeModeBtn.safe-on{background:#16a34a;border-color:#22c55e;color:#fff}
 #safeModeBtn.safe-off{background:#111827;border-color:#1f2937;color:#fff}
-.btn.action{min-width:64px;height:30px;padding:0 8px;font-size:12px;border-radius:9px}
-.btn.policy-on{background:#16a34a;border-color:#22c55e;color:#fff;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btn.action{width:84px;height:30px;padding:0 8px;font-size:12px;border-radius:9px}
+.op-row{display:flex;align-items:center;gap:6px;min-width:520px}
+.btn.policy-on{background:#16a34a;border-color:#22c55e;color:#fff;width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btn.policy-off{width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .icon-btn{height:18px;width:18px;margin-left:4px;border:none;background:transparent;color:#111;cursor:pointer;line-height:1;font-size:15px;transform:skewX(-12deg);padding:0}
 .icon-btn:hover{opacity:.75}
 .name-wrap{display:inline-block;vertical-align:middle}

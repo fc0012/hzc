@@ -81,7 +81,7 @@ function policyImageLabel(imageId){
   }
   if(official[v]) return official[v]
   const s=(META.snapshots||[]).find(x=>String(x.id)===v)
-  if(s) return `快照#${s.id}${s.name?` ${s.name}`:''}`
+  if(s) return `${s.name||'快照'}`
   return v
 }
 
@@ -98,7 +98,7 @@ function rowHtml(r){
   const p=r.auto_policy||{}
   const policyOn=!!p.enabled
   const policyLabel=policyOn ? `策略 ${Math.round((Number(p.threshold||0))*100)}% · ${policyImageLabel(p.image_id)}` : '自动策略'
-  const policyBtnClass = policyOn ? 'btn action policy-on' : 'btn action'
+  const policyBtnClass = policyOn ? 'btn action policy-on' : 'btn action policy-off'
   const qbCell = q.enabled
     ? `<div class='qb-line'>
          <span class='qb-col'>↑ ${formatIECps(q.up_speed)}</span>
@@ -121,13 +121,13 @@ function rowHtml(r){
     <td>${qbCell}</td>
     <td>${formatIEC(r.used_bytes)} (${formatTBPrecise(r.used_tb)})</td><td>${todayCell}</td><td>${formatTBPrecise(r.limit_tb)}</td>
     <td><div class="progress"><div class="bar ${warn?'warn':''}" style="width:${pct}%"></div></div><div class="ratio-text">${pct.toFixed(1)}%</div></td>
-    <td>
+    <td><div class="op-row">
       <button class="btn action" onclick="openQBModal(${r.id})">配置qB</button>
-      <button class="${policyBtnClass}" onclick="openAutoPolicyModal(${r.id})">${policyLabel}</button>
+      <button class="${policyBtnClass}" onclick="openAutoPolicyModal(${r.id})" title="${policyLabel}">${policyLabel}</button>
       <button class="btn action" onclick="rebootServer(${r.id})">重启</button>
       <button class="btn action" onclick="hardRebootServer(${r.id})">强制重启</button>
       <button class="btn btn-danger action" onclick="openRebuildModal(${r.id})">重建</button>
-    </td>
+    </div></td>
   </tr>`
 }
 async function copyText(v){
