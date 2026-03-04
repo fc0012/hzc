@@ -34,6 +34,21 @@ class HetznerClient:
             r.raise_for_status()
             return r.json().get("images", [])
 
+    async def list_primary_ips(self):
+        out = []
+        page = 1
+        while True:
+            async with httpx.AsyncClient(timeout=30) as c:
+                r = await c.get(f"{BASE}/primary_ips", headers=self.headers, params={"per_page": 50, "page": page})
+                r.raise_for_status()
+                data = r.json()
+                items = data.get("primary_ips", [])
+                out.extend(items)
+                if not items or len(items) < 50:
+                    break
+                page += 1
+        return out
+
     @staticmethod
     def _normalize_series(raw):
         # New format: {"values": [[ts,val], ...]}
