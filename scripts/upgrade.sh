@@ -20,17 +20,51 @@ if ! command -v git >/dev/null 2>&1; then
   exit 1
 fi
 
+if [ ! -d .git ]; then
+  echo "[x] 当前目录不是 Git 仓库：$(pwd)"
+  exit 1
+fi
+
 echo "[i] 拉取最新代码..."
 git fetch origin main
+
+LOCAL_BEFORE="$(git rev-parse HEAD)"
+REMOTE_HEAD="$(git rev-parse origin/main)"
+echo "[i] local(before)=${LOCAL_BEFORE:0:7} remote=${REMOTE_HEAD:0:7}"
 
 echo "[i] 强制同步到最新版（会覆盖本地代码改动）..."
 git reset --hard origin/main
 
-echo "[i] 重建并滚动更新容器（不中断脚本）..."
+LOCAL_AFTER="$(git rev-parse HEAD)"
+if [ "$LOCAL_AFTER" != "$REMOTE_HEAD" ]; then
+  echo "[x] 升级失败：代码未对齐 origin/main"
+  echo "    local(after)=${LOCAL_AFTER:0:7} remote=${REMOTE_HEAD:0:7}"
+  exit 2
+fi
+echo "[ok] 代码已对齐 origin/main: ${LOCAL_AFTER:0:7}"
+
+echo "[i] 重建并更新容器..."
 $COMPOSE_CMD up -d --build
+
+echo "[i] 健康检查 /api/meta ..."
+APP_META=""
+for i in $(seq 1 20); do
+  APP_META="$(curl -fsS "http://127.0.0.1:1227/api/meta" || true)"
+  if [ -n "$APP_META" ]; then
+    break
+  fi
+  sleep 2
+done
+
+if [ -z "$APP_META" ]; then
+  echo "[x] 升级后健康检查失败：/api/meta 无响应"
+  $COMPOSE_CMD ps || true
+  exit 3
+fi
 
 echo "[ok] 升级完成"
 echo "状态："
 $COMPOSE_CMD ps
 
+echo "meta: $(echo "$APP_META" | tr -d '\n' | head -c 180)"
 echo "访问: http://$(hostname -I | awk '{print $1}'):1227"
