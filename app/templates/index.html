@@ -83,6 +83,13 @@
         <h3>快照管理</h3>
         <button class="btn ghost small" onclick="loadSnapshotsList(true)">刷新</button>
       </div>
+      <div class="grid" style="margin-bottom:10px">
+        <label>选择服务器<select id="sm_server"></select></label>
+        <label>快照名称<input id="sm_name" placeholder="manual-snap-xxx" /></label>
+      </div>
+      <div class="modal-actions" style="margin-top:0;margin-bottom:10px">
+        <button class="btn primary" onclick="createSnapshotFromManager()">创建快照</button>
+      </div>
       <div id="snapshotsList">加载中...</div>
       <div class="modal-actions">
         <button class="btn" onclick="closeSnapshotsModal()">关闭</button>

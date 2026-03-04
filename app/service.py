@@ -370,11 +370,14 @@ class MonitorService:
     def auto_policies(self):
         return self.auto_policy.all()
 
-    def auto_policy_set(self, server_id: int, enabled: bool, threshold: float, image_id: int | None = None):
+    def auto_policy_set(self, server_id: int, enabled: bool, threshold: float, image_id=None):
+        img = None
+        if image_id is not None and str(image_id) != "":
+            img = int(image_id) if str(image_id).isdigit() else str(image_id)
         p = {
             "enabled": bool(enabled),
             "threshold": float(threshold),
-            "image_id": int(image_id) if image_id else None,
+            "image_id": img,
         }
         self.auto_policy.set(server_id, p)
         return {"ok": True, "server_id": server_id, "policy": p}

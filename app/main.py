@@ -57,7 +57,7 @@ class AutoPolicyReq(BaseModel):
     server_id: int
     enabled: bool = True
     threshold: float
-    image_id: int | None = None
+    image_id: int | str | None = None
 
 
 @app.on_event('startup')

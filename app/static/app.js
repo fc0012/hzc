@@ -81,6 +81,10 @@ function rowHtml(r){
   const todayCell=`${formatIEC(r.today_bytes)} (${formatTB2(r.today_bytes)}) ${anomaly?`<span class='badge-traffic ${anomaly==='crit'?'badge-crit':'badge-warn'}'>${anomaly==='crit'?'异常':'偏高'}</span>`:''}`
 
   const q=r.qb||{}
+  const p=r.auto_policy||{}
+  const policyOn=!!p.enabled
+  const policyLabel=policyOn ? `策略 ${Math.round((Number(p.threshold||0))*100)}% · ${p.image_id||''}` : '自动策略'
+  const policyBtnClass = policyOn ? 'btn action policy-on' : 'btn action'
   const qbCell = q.enabled
     ? `<div class='qb-line'>
          <span class='qb-col'>↑ ${formatIECps(q.up_speed)}</span>
@@ -105,11 +109,10 @@ function rowHtml(r){
     <td><div class="progress"><div class="bar ${warn?'warn':''}" style="width:${pct}%"></div></div><div class="ratio-text">${pct.toFixed(1)}%</div></td>
     <td>
       <button class="btn action" onclick="openQBModal(${r.id})">配置qB</button>
-      <button class="btn action" onclick="openAutoPolicyModal(${r.id})">自动策略</button>
+      <button class="${policyBtnClass}" onclick="openAutoPolicyModal(${r.id})">${policyLabel}</button>
       <button class="btn action" onclick="rebootServer(${r.id})">重启</button>
       <button class="btn action" onclick="hardRebootServer(${r.id})">强制重启</button>
       <button class="btn btn-danger action" onclick="openRebuildModal(${r.id})">重建</button>
-      <button class="btn snapshot action" onclick="snapshot(${r.id})">创建快照</button>
     </td>
   </tr>`
 }
@@ -305,17 +308,23 @@ async function submitRebuild(){
   closeRebuildModal(); loadAll(false)
 }
 
-async function snapshot(id){
+async function snapshot(id, snapName){
   const e=await fetch(`/api/snapshot_estimate/${id}`),est=await e.json();
   if(!e.ok||!est?.ok){alert('无法获取快照费用预估');return}
   const defaultName=`manual-snap-${id}-${new Date().toISOString().slice(0,19).replace(/[-:T]/g,'')}`
-  const snapName=prompt('请输入快照名称：', defaultName)
-  if(!snapName) return
-  const msg=`服务器: ${est.server_name}\n磁盘总量: ${Number(est.disk_gb||0).toFixed(2)} GB\n预估快照体积: ${Number(est.estimated_snapshot_size_gb||0).toFixed(2)} GB\n预估月费用: €${Number(est.estimated_monthly_eur||0).toFixed(2)}\n说明: ${est.estimation_note}\n\n快照名称: ${snapName}\n\n确认创建快照？`
+  const name=(snapName||defaultName).trim()
+  const msg=`服务器: ${est.server_name}\n磁盘总量: ${Number(est.disk_gb||0).toFixed(2)} GB\n预估快照体积: ${Number(est.estimated_snapshot_size_gb||0).toFixed(2)} GB\n预估月费用: €${Number(est.estimated_monthly_eur||0).toFixed(2)}\n说明: ${est.estimation_note}\n\n快照名称: ${name}\n\n确认创建快照？`
   if(!confirm(msg)) return
-  const r=await fetch(`/api/snapshot/${id}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({description:snapName})})
+  const r=await fetch(`/api/snapshot/${id}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({description:name})})
   const d=await r.json(); if(!r.ok||!d?.ok){alert('快照创建失败');return}
   toast('快照任务已提交'); setTimeout(()=>{loadMeta();loadSnapshotsList()},3000)
+}
+
+async function createSnapshotFromManager(){
+  const sid=Number(byId('sm_server').value)
+  const name=(byId('sm_name').value||'').trim()
+  if(!sid){alert('请先选择服务器');return}
+  await snapshot(sid, name)
 }
 
 function openCreateModal(){byId('createModal').classList.remove('hidden')}
@@ -355,7 +364,16 @@ async function saveTGConfig(restartAfter=false){
 }
 async function submitCreate(){const body={name:byId('c_name').value||`srv-${Date.now()}`,server_type:byId('c_type').value,location:byId('c_location').value,image:byId('c_image').value};const r=await fetch('/api/create_server',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}),d=await r.json();if(!r.ok){alert(d?.detail||d?.error||'创建失败');return}toast('创建任务已提交');closeCreateModal();loadData()}
 
-function openSnapshotsModal(){byId('snapshotsModal').classList.remove('hidden');loadSnapshotsList()}
+function openSnapshotsModal(){
+  byId('snapshotsModal').classList.remove('hidden')
+  const opts=(CURRENT_SERVERS||[]).map(s=>`<option value="${s.id}">${s.name} (#${s.id})</option>`).join('')
+  byId('sm_server').innerHTML=opts
+  if(!byId('sm_name').value && CURRENT_SERVERS?.length){
+    const sid=CURRENT_SERVERS[0].id
+    byId('sm_name').value=`manual-snap-${sid}-${new Date().toISOString().slice(0,19).replace(/[-:T]/g,'')}`
+  }
+  loadSnapshotsList()
+}
 function closeSnapshotsModal(){byId('snapshotsModal').classList.add('hidden')}
 async function loadSnapshotsList(showToast=false){
   const r=await fetch('/api/meta'),m=await r.json(),arr=m.snapshots||[]
@@ -421,10 +439,10 @@ async function saveAutoPolicy(){
     server_id:Number(byId('ap_server_id').value),
     enabled:!!byId('ap_enabled').checked,
     threshold:Number(byId('ap_threshold').value||0),
-    image_id: byId('ap_image_id').value ? Number(byId('ap_image_id').value) : null,
+    image_id: byId('ap_image_id').value ? byId('ap_image_id').value : null,
   }
   if(body.enabled && (!body.threshold || body.threshold<=0 || body.threshold>1)){ alert('阈值需在 0~1 之间，例如 0.95'); return }
-  if(body.enabled && !body.image_id){ alert('开启自动策略时必须选择用于重建的已有快照'); return }
+  if(body.enabled && !body.image_id){ alert('开启自动策略时必须选择用于重建的镜像或快照'); return }
   const r=await fetch('/api/auto_policy',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})
   const d=await r.json()
   if(!r.ok||!d?.ok){ alert(d?.detail||d?.error||'保存失败'); return }
