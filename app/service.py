@@ -36,6 +36,24 @@ class MonitorService:
             pips = await self.client.list_primary_ips()
         except Exception:
             pips = []
+        try:
+            servers = await self.client.list_servers()
+        except Exception:
+            servers = []
+
+        used_ipv4 = {}
+        used_ipv6 = {}
+        for s in servers:
+            sid = s.get("id")
+            sname = s.get("name")
+            net = s.get("public_net") or {}
+            v4id = ((net.get("ipv4") or {}).get("id"))
+            v6id = ((net.get("ipv6") or {}).get("id"))
+            if v4id:
+                used_ipv4[int(v4id)] = {"server_id": sid, "server_name": sname}
+            if v6id:
+                used_ipv6[int(v6id)] = {"server_id": sid, "server_name": sname}
+
         return {
             "app_version": settings.app_version,
             "server_types": [
@@ -65,9 +83,14 @@ class MonitorService:
                     "name": p.get("name") or f"ip-{p.get('id')}",
                     "location": ((p.get("datacenter") or {}).get("location") or {}).get("name") or (p.get("location") or {}).get("name"),
                     "datacenter": (p.get("datacenter") or {}).get("name"),
+                    "occupied": bool((p.get("assignee") or {}).get("id") or used_ipv4.get(int(p.get("id") or 0))),
+                    "occupied_by": used_ipv4.get(int(p.get("id") or 0)) or {
+                        "server_id": ((p.get("assignee") or {}).get("id")),
+                        "server_name": ((p.get("assignee") or {}).get("name")) or "unknown",
+                    },
                 }
                 for p in pips
-                if p.get("type") == "ipv4" and not p.get("assignee")
+                if p.get("type") == "ipv4"
             ],
             "primary_ipv6s": [
                 {
@@ -76,9 +99,14 @@ class MonitorService:
                     "name": p.get("name") or f"ip-{p.get('id')}",
                     "location": ((p.get("datacenter") or {}).get("location") or {}).get("name") or (p.get("location") or {}).get("name"),
                     "datacenter": (p.get("datacenter") or {}).get("name"),
+                    "occupied": bool((p.get("assignee") or {}).get("id") or used_ipv6.get(int(p.get("id") or 0))),
+                    "occupied_by": used_ipv6.get(int(p.get("id") or 0)) or {
+                        "server_id": ((p.get("assignee") or {}).get("id")),
+                        "server_name": ((p.get("assignee") or {}).get("name")) or "unknown",
+                    },
                 }
                 for p in pips
-                if p.get("type") == "ipv6" and not p.get("assignee")
+                if p.get("type") == "ipv6"
             ],
         }
 

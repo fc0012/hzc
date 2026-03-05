@@ -241,25 +241,33 @@ function refreshPrimaryIpOptions(){
   const loc=byId('c_location')?.value || ''
   const p4all=(META.primary_ipv4s||[])
   const p6all=(META.primary_ipv6s||[])
-  const p4=p4all.filter(p=>!p.location || p.location===loc)
-  const p6=p6all.filter(p=>!p.location || p.location===loc)
+  const p4loc=p4all.filter(p=>!p.location || p.location===loc)
+  const p6loc=p6all.filter(p=>!p.location || p.location===loc)
+  const p4=p4loc.filter(p=>!p.occupied)
+  const p6=p6loc.filter(p=>!p.occupied)
 
-  byId('c_primary_ip').innerHTML = p4.length
-    ? ['<option value="">自动分配IPv4</option>'].concat(p4.map(p=>`<option value="${p.id}">${p.ip}${p.location?` · ${p.location}`:''}${p.datacenter?` (${p.datacenter})`:''}</option>`)).join('')
-    : '<option value="" selected>无可用IPv4，将自动分配IPv4</option>'
+  byId('c_primary_ip').innerHTML = ['<option value="">自动分配IPv4</option>']
+    .concat(p4.map(p=>`<option value="${p.id}">${p.ip}${p.location?` · ${p.location}`:''}${p.datacenter?` (${p.datacenter})`:''}</option>`))
+    .concat(p4loc.filter(p=>p.occupied).map(p=>`<option value="" disabled>${p.ip}（已占用：${(p.occupied_by||{}).server_name||('server#'+((p.occupied_by||{}).server_id||'?'))}）</option>`))
+    .join('')
+  if(!p4.length) byId('c_primary_ip').innerHTML += '<option value="" selected disabled>无可用IPv4</option>'
   byId('c_primary_ip').value = ''
 
-  byId('c_primary_ipv6').innerHTML = p6.length
-    ? ['<option value="">自动分配IPv6</option>'].concat(p6.map(p=>`<option value="${p.id}">${p.ip}${p.location?` · ${p.location}`:''}${p.datacenter?` (${p.datacenter})`:''}</option>`)).join('')
-    : '<option value="" selected>无可用IPv6，将自动分配IPv6</option>'
+  byId('c_primary_ipv6').innerHTML = ['<option value="">自动分配IPv6</option>']
+    .concat(p6.map(p=>`<option value="${p.id}">${p.ip}${p.location?` · ${p.location}`:''}${p.datacenter?` (${p.datacenter})`:''}</option>`))
+    .concat(p6loc.filter(p=>p.occupied).map(p=>`<option value="" disabled>${p.ip}（已占用：${(p.occupied_by||{}).server_name||('server#'+((p.occupied_by||{}).server_id||'?'))}）</option>`))
+    .join('')
+  if(!p6.length) byId('c_primary_ipv6').innerHTML += '<option value="" selected disabled>无可用IPv6</option>'
   byId('c_primary_ipv6').value = ''
 
   const hint=byId('ipLocationHint')
   if(hint){
+    const occ4 = p4loc.filter(p=>p.occupied).length
+    const occ6 = p6loc.filter(p=>p.occupied).length
     if(!p4.length && !p6.length){
-      hint.textContent=`当前机房 ${loc} 无可用Primary IP，创建时将自动分配IP。`
+      hint.textContent=`当前机房 ${loc} 无可用Primary IP（IPv4占用 ${occ4} / IPv6占用 ${occ6}），创建时将自动分配IP。`
     }else{
-      hint.textContent=`已按机房 ${loc} 过滤可用IP（仅同机房可选）。`
+      hint.textContent=`已按机房 ${loc} 过滤：可用 IPv4 ${p4.length} / IPv6 ${p6.length}；占用 IPv4 ${occ4} / IPv6 ${occ6}（占用项不可选）。`
     }
   }
 }
