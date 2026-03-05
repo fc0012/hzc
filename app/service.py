@@ -63,6 +63,8 @@ class MonitorService:
                     "id": p.get("id"),
                     "ip": p.get("ip"),
                     "name": p.get("name") or f"ip-{p.get('id')}",
+                    "location": ((p.get("datacenter") or {}).get("location") or {}).get("name") or (p.get("location") or {}).get("name"),
+                    "datacenter": (p.get("datacenter") or {}).get("name"),
                 }
                 for p in pips
                 if p.get("type") == "ipv4" and not p.get("assignee")
@@ -72,6 +74,8 @@ class MonitorService:
                     "id": p.get("id"),
                     "ip": p.get("ip"),
                     "name": p.get("name") or f"ip-{p.get('id')}",
+                    "location": ((p.get("datacenter") or {}).get("location") or {}).get("name") or (p.get("location") or {}).get("name"),
+                    "datacenter": (p.get("datacenter") or {}).get("name"),
                 }
                 for p in pips
                 if p.get("type") == "ipv6" and not p.get("assignee")

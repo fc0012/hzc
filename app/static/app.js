@@ -219,20 +219,8 @@ async function loadMeta(showToast=false){
   byId('f_family').innerHTML=['<option value="">全部系列</option>'].concat(fams.map(f=>`<option value="${f}">${f}</option>`)).join('')
   const snaps=(META.snapshots||[]).map(s=>`<option value="${s.id}">snapshot#${s.id} - ${s.name||''} (${s.size_gb||0}GB)</option>`)
   byId('c_image').innerHTML=['<option value="debian-12">debian-12 (官方镜像)</option>'].concat(snaps).join('')
-  const p4=(META.primary_ipv4s||[])
-  const p6=(META.primary_ipv6s||[])
-  byId('c_primary_ip').innerHTML = p4.length
-    ? ['<option value="">自动分配IPv4</option>'].concat(p4.map(p=>`<option value="${p.id}">${p.ip}${p.name?` (${p.name})`:''}</option>`)).join('')
-    : '<option value="__none__" selected>无可用IPv4</option><option value="">自动分配IPv4</option>'
-  byId('c_primary_ip').disabled = false
-  byId('c_primary_ip').value = p4.length ? '' : '__none__'
-
-  byId('c_primary_ipv6').innerHTML = p6.length
-    ? ['<option value="">自动分配IPv6</option>'].concat(p6.map(p=>`<option value="${p.id}">${p.ip}${p.name?` (${p.name})`:''}</option>`)).join('')
-    : '<option value="__none__" selected>无可用IPv6</option><option value="">自动分配IPv6</option>'
-  byId('c_primary_ipv6').disabled = false
-  byId('c_primary_ipv6').value = p6.length ? '' : '__none__'
-  byId('c_location').onchange=()=>{renderTypeOptions();showTypePrice()}
+  refreshPrimaryIpOptions()
+  byId('c_location').onchange=()=>{renderTypeOptions();showTypePrice();refreshPrimaryIpOptions()}
   byId('c_type').onchange=showTypePrice
   byId('f_cores').onchange=renderTypeOptions
   byId('f_mem').onchange=renderTypeOptions
@@ -247,6 +235,33 @@ function showTypePrice(){
   if(t){const p=t.prices?.find(x=>x.location===loc)||t.prices?.[0],state=stockState(t,loc);st=`库存状态：${state}`;if(p?.price_monthly?.gross){const pm=Number(p.price_monthly.gross||0).toFixed(2);txt=`约 €${pm} /月（${p.location}）`;est=`创建前费用预估：月费 €${pm}（不含超额流量）`}}
   byId('typePrice').textContent=txt;byId('costEst').textContent=est
   byId('typeStock').innerHTML=st.replace('有货','<span class="stock-ok">有货</span>').replace('紧张','<span class="stock-warn">紧张</span>').replace('缺货','<span class="stock-bad">缺货</span>')
+}
+
+function refreshPrimaryIpOptions(){
+  const loc=byId('c_location')?.value || ''
+  const p4all=(META.primary_ipv4s||[])
+  const p6all=(META.primary_ipv6s||[])
+  const p4=p4all.filter(p=>!p.location || p.location===loc)
+  const p6=p6all.filter(p=>!p.location || p.location===loc)
+
+  byId('c_primary_ip').innerHTML = p4.length
+    ? ['<option value="">自动分配IPv4</option>'].concat(p4.map(p=>`<option value="${p.id}">${p.ip}${p.location?` · ${p.location}`:''}${p.datacenter?` (${p.datacenter})`:''}</option>`)).join('')
+    : '<option value="__none__" selected>无可用IPv4</option><option value="">将自动分配IPv4</option>'
+  byId('c_primary_ip').value = p4.length ? '' : '__none__'
+
+  byId('c_primary_ipv6').innerHTML = p6.length
+    ? ['<option value="">自动分配IPv6</option>'].concat(p6.map(p=>`<option value="${p.id}">${p.ip}${p.location?` · ${p.location}`:''}${p.datacenter?` (${p.datacenter})`:''}</option>`)).join('')
+    : '<option value="__none__" selected>无可用IPv6</option><option value="">将自动分配IPv6</option>'
+  byId('c_primary_ipv6').value = p6.length ? '' : '__none__'
+
+  const hint=byId('ipLocationHint')
+  if(hint){
+    if(!p4.length && !p6.length){
+      hint.textContent=`当前机房 ${loc} 无可用Primary IP，创建时将自动分配IP。`
+    }else{
+      hint.textContent=`已按机房 ${loc} 过滤可用IP（仅同机房可选）。`
+    }
+  }
 }
 
 function preset(k){if(k==='basic'){byId('f_cores').value='2';byId('f_mem').value='2';byId('f_family').value='cpx'} if(k==='balanced'){byId('f_cores').value='4';byId('f_mem').value='8';byId('f_family').value='cpx'} if(k==='pro'){byId('f_cores').value='8';byId('f_mem').value='16';byId('f_family').value=''} renderTypeOptions()}
