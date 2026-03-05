@@ -246,13 +246,13 @@ function refreshPrimaryIpOptions(){
 
   byId('c_primary_ip').innerHTML = p4.length
     ? ['<option value="">自动分配IPv4</option>'].concat(p4.map(p=>`<option value="${p.id}">${p.ip}${p.location?` · ${p.location}`:''}${p.datacenter?` (${p.datacenter})`:''}</option>`)).join('')
-    : '<option value="__none__" selected>无可用IPv4</option><option value="">将自动分配IPv4</option>'
-  byId('c_primary_ip').value = p4.length ? '' : '__none__'
+    : '<option value="" selected>无可用IPv4，将自动分配IPv4</option>'
+  byId('c_primary_ip').value = ''
 
   byId('c_primary_ipv6').innerHTML = p6.length
     ? ['<option value="">自动分配IPv6</option>'].concat(p6.map(p=>`<option value="${p.id}">${p.ip}${p.location?` · ${p.location}`:''}${p.datacenter?` (${p.datacenter})`:''}</option>`)).join('')
-    : '<option value="__none__" selected>无可用IPv6</option><option value="">将自动分配IPv6</option>'
-  byId('c_primary_ipv6').value = p6.length ? '' : '__none__'
+    : '<option value="" selected>无可用IPv6，将自动分配IPv6</option>'
+  byId('c_primary_ipv6').value = ''
 
   const hint=byId('ipLocationHint')
   if(hint){
