@@ -221,12 +221,15 @@ async function loadMeta(showToast=false){
   byId('c_image').innerHTML=['<option value="debian-12">debian-12 (官方镜像)</option>'].concat(snaps).join('')
   const p4=(META.primary_ipv4s||[])
   const p6=(META.primary_ipv6s||[])
-  byId('c_primary_ip').innerHTML=['<option value="">自动分配IPv4</option>']
-    .concat(p4.length ? p4.map(p=>`<option value="${p.id}">${p.ip}${p.name?` (${p.name})`:''}</option>`) : ['<option value="" disabled>无可用IPv4</option>'])
-    .join('')
-  byId('c_primary_ipv6').innerHTML=['<option value="">自动分配IPv6</option>']
-    .concat(p6.length ? p6.map(p=>`<option value="${p.id}">${p.ip}${p.name?` (${p.name})`:''}</option>`) : ['<option value="" disabled>无可用IPv6</option>'])
-    .join('')
+  byId('c_primary_ip').innerHTML = p4.length
+    ? ['<option value="">请选择已有IPv4（可选）</option>'].concat(p4.map(p=>`<option value="${p.id}">${p.ip}${p.name?` (${p.name})`:''}</option>`)).join('')
+    : '<option value="" selected>无可用IPv4</option>'
+  byId('c_primary_ip').disabled = !p4.length
+
+  byId('c_primary_ipv6').innerHTML = p6.length
+    ? ['<option value="">请选择已有IPv6（可选）</option>'].concat(p6.map(p=>`<option value="${p.id}">${p.ip}${p.name?` (${p.name})`:''}</option>`)).join('')
+    : '<option value="" selected>无可用IPv6</option>'
+  byId('c_primary_ipv6').disabled = !p6.length
   byId('c_location').onchange=()=>{renderTypeOptions();showTypePrice()}
   byId('c_type').onchange=showTypePrice
   byId('f_cores').onchange=renderTypeOptions
