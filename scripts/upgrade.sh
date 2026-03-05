@@ -48,8 +48,23 @@ $COMPOSE_CMD up -d --build
 
 echo "[i] 健康检查 /api/meta ..."
 APP_META=""
+fetch_meta(){
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsS "http://127.0.0.1:1227/api/meta" || true
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO- "http://127.0.0.1:1227/api/meta" || true
+  else
+    python3 - <<'PY' || true
+import urllib.request
+try:
+    print(urllib.request.urlopen('http://127.0.0.1:1227/api/meta', timeout=3).read().decode('utf-8', 'ignore'))
+except Exception:
+    pass
+PY
+  fi
+}
 for i in $(seq 1 20); do
-  APP_META="$(curl -fsS "http://127.0.0.1:1227/api/meta" || true)"
+  APP_META="$(fetch_meta)"
   if [ -n "$APP_META" ]; then
     break
   fi
