@@ -165,7 +165,10 @@ class TelegramControl:
                 "  fi; "
                 "fi; "
                 "docker rm -f hzc-upgrader-lock >/dev/null 2>&1 || true; "
-                "CID=$(docker-compose run -d --name hzc-upgrader-lock --no-deps "
+                "if command -v docker-compose >/dev/null 2>&1; then COMPOSE_RUN='docker-compose'; "
+                "elif docker compose version >/dev/null 2>&1; then COMPOSE_RUN='docker compose'; "
+                "else echo '__NO_COMPOSE__'; exit 13; fi; "
+                "CID=$($COMPOSE_RUN run -d --name hzc-upgrader-lock --no-deps "
                 "--entrypoint bash hetzner-traffic-guard "
                 "-lc \"cd /opt/hzc && timeout 1800 ./scripts/upgrade.sh > /opt/hzc/state/upgrade.log 2>&1 || true\"); "
                 "echo $CID"
@@ -181,6 +184,8 @@ class TelegramControl:
             if p.returncode != 0:
                 if "__UPGRADE_LOCKED__" in so or "hzc-upgrader-lock" in se:
                     return await self.send("已有升级任务正在执行，请稍后查看【📜 升级日志】。", chat_id)
+                if "__NO_COMPOSE__" in so:
+                    return await self.send("升级任务触发失败：未检测到 docker compose / docker-compose", chat_id)
                 msg = (se or so or "unknown error")[-700:]
                 return await self.send(f"升级任务触发失败：{msg}", chat_id)
 
