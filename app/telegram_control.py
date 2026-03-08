@@ -1,5 +1,6 @@
 import asyncio
 import time
+import shlex
 import httpx
 from app.config import settings
 from app.runtime_config import RuntimeConfig
@@ -177,7 +178,7 @@ class TelegramControl:
                 "echo $CID"
             )
             p = await asyncio.create_subprocess_shell(
-                f"bash -lc '{upgrade_cmd}'",
+                f"bash -lc {shlex.quote(upgrade_cmd)}",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
