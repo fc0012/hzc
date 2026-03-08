@@ -7,10 +7,13 @@ load_dotenv()
 
 
 def detect_git_commit_short() -> str:
-    try:
-        return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
-    except Exception:
-        return "unknown"
+    # 优先读取宿主挂载仓库（/opt/hzc），避免容器内 /app 无 .git 时显示 unknown
+    for cmd in (["git", "-C", "/opt/hzc", "rev-parse", "--short", "HEAD"], ["git", "rev-parse", "--short", "HEAD"]):
+        try:
+            return subprocess.check_output(cmd, text=True).strip()
+        except Exception:
+            pass
+    return "unknown"
 
 
 class Settings(BaseModel):
@@ -27,7 +30,7 @@ class Settings(BaseModel):
     qb_username: str = os.getenv("QB_USERNAME", "")
     qb_password: str = os.getenv("QB_PASSWORD", "")
     qb_store_path: str = os.getenv("QB_STORE_PATH", "/app/state/qb_nodes.json")
-    app_version: str = os.getenv("APP_VERSION", "26.3.62")
+    app_version: str = os.getenv("APP_VERSION", "26.3.63")
     app_commit: str = os.getenv("APP_COMMIT", detect_git_commit_short())
     runtime_config_path: str = os.getenv("RUNTIME_CONFIG_PATH", "/app/state/runtime_config.json")
     auto_policy_path: str = os.getenv("AUTO_POLICY_PATH", "/app/state/auto_policies.json")
