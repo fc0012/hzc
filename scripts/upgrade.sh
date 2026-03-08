@@ -71,43 +71,54 @@ $COMPOSE_CMD up -d --build
 
 echo "[i] 健康检查 /api/meta ..."
 APP_META=""
+LAST_ERR=""
 fetch_meta(){
   # We are in helper container; 127.0.0.1 points to helper itself.
-  # So probe target service container via compose exec first.
-  if $COMPOSE_CMD exec -T hetzner-traffic-guard python3 - <<'PY' 2>/dev/null
+  # Probe target service container namespace first.
+  if OUT="$($COMPOSE_CMD exec -T hetzner-traffic-guard python3 - <<'PY' 2>/dev/null
 import urllib.request
-print(urllib.request.urlopen('http://127.0.0.1:1227/api/meta', timeout=3).read().decode('utf-8', 'ignore'))
+try:
+    print(urllib.request.urlopen('http://127.0.0.1:1227/api/meta', timeout=4).read().decode('utf-8', 'ignore'))
+except Exception as e:
+    print(f"__ERR__:{e}")
 PY
-  then
+)"; then
+    echo "$OUT"
     return 0
   fi
 
   # fallback: try host-gateway alias when available
   if command -v curl >/dev/null 2>&1; then
-    curl -fsS --connect-timeout 3 --max-time 4 "http://host.docker.internal:1227/api/meta" || true
+    curl -fsS --connect-timeout 4 --max-time 5 "http://host.docker.internal:1227/api/meta" || true
   elif command -v wget >/dev/null 2>&1; then
-    wget -qO- --timeout=4 "http://host.docker.internal:1227/api/meta" || true
+    wget -qO- --timeout=5 "http://host.docker.internal:1227/api/meta" || true
   else
     python3 - <<'PY' || true
 import urllib.request
 try:
-    print(urllib.request.urlopen('http://host.docker.internal:1227/api/meta', timeout=3).read().decode('utf-8', 'ignore'))
-except Exception:
-    pass
+    print(urllib.request.urlopen('http://host.docker.internal:1227/api/meta', timeout=4).read().decode('utf-8', 'ignore'))
+except Exception as e:
+    print(f"__ERR__:{e}")
 PY
   fi
 }
-for i in $(seq 1 20); do
+for i in $(seq 1 45); do
   APP_META="$(fetch_meta)"
-  if [ -n "$APP_META" ]; then
+  if echo "$APP_META" | grep -q '"app_version"'; then
     break
   fi
+  if [ -n "$APP_META" ]; then
+    LAST_ERR="$APP_META"
+  fi
+  APP_META=""
   sleep 2
 done
 
 if [ -z "$APP_META" ]; then
   echo "[x] 升级后健康检查失败：/api/meta 无响应"
+  [ -n "$LAST_ERR" ] && echo "[x] 最近探测结果: $(echo "$LAST_ERR" | tail -n 1)"
   $COMPOSE_CMD ps || true
+  $COMPOSE_CMD logs --tail=40 hetzner-traffic-guard || true
   exit 3
 fi
 
