@@ -42,8 +42,8 @@ body{margin:0;color:var(--text);background:var(--bg);font-family:Inter,Arial,san
 body[data-theme='light'] .grid select option{background:#ffffff;color:#0f172a}
 .delete-grid .checkline{flex-direction:row;align-items:center;gap:8px}
 .delete-grid .checkline input[type="checkbox"]{width:14px;height:14px;padding:0;border:1px solid var(--line);border-radius:4px;accent-color:var(--blue);flex:0 0 auto}
-.delete-grid .option-chip{padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:rgba(78,131,255,.08);font-weight:600}
-body[data-theme='light'] .delete-grid .option-chip{background:#f2f6ff}
+.delete-grid .option-chip{display:inline-flex;justify-self:start;width:auto;max-width:max-content;padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:rgba(78,131,255,.06);font-weight:500}
+body[data-theme='light'] .delete-grid .option-chip{background:#f6f8ff}
 .modal-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .stock-ok{color:var(--green)}.stock-warn{color:var(--orange)}.stock-bad{color:var(--red)}
 .toast{position:fixed;right:16px;bottom:16px;padding:12px 14px;border-radius:10px;background:#111b3f;border:1px solid #3d56a7;color:#fff;z-index:30;box-shadow:0 8px 30px #00000052}
