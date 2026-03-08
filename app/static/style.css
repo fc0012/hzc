@@ -36,7 +36,8 @@ body{margin:0;color:var(--text);background:var(--bg);font-family:Inter,Arial,san
 .spark i:hover::before{content:'';position:absolute;left:calc(100% + 2px);bottom:8px;border:5px solid transparent;border-right-color:#3d56a7;z-index:5;pointer-events:none}
 .badge-traffic{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:999px;font-size:11px;margin-left:6px}.badge-warn{background:#3b2d12;color:#f9ca7a}.badge-crit{background:#4a1f27;color:#ff9cab}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:12px;z-index:20}.hidden{display:none}
-.modal-card{width:min(760px,96vw);padding:14px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid label{display:flex;flex-direction:column;gap:6px;min-width:0;font-size:13px}.grid input,.grid select{height:40px;width:100%;padding:0 10px;background:transparent;border:1px solid var(--line);border-radius:10px;color:var(--text)}
+.modal-card{width:min(760px,96vw);padding:14px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid label{display:flex;flex-direction:column;gap:6px;min-width:0;font-size:13px}.grid input:not([type="checkbox"]),.grid select{height:40px;width:100%;padding:0 10px;background:transparent;border:1px solid var(--line);border-radius:10px;color:var(--text)}
+.grid input[type="checkbox"]{width:14px;height:14px;padding:0;accent-color:var(--blue)}
 .grid select option{background:#0f1736;color:#ecf1ff}
 body[data-theme='light'] .grid select option{background:#ffffff;color:#0f172a}
 .delete-grid .checkline{flex-direction:row;align-items:center;gap:8px}
