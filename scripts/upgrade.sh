@@ -84,9 +84,9 @@ PY
 
   # fallback: try host-gateway alias when available
   if command -v curl >/dev/null 2>&1; then
-    curl -fsS "http://host.docker.internal:1227/api/meta" || true
+    curl -fsS --connect-timeout 3 --max-time 4 "http://host.docker.internal:1227/api/meta" || true
   elif command -v wget >/dev/null 2>&1; then
-    wget -qO- "http://host.docker.internal:1227/api/meta" || true
+    wget -qO- --timeout=4 "http://host.docker.internal:1227/api/meta" || true
   else
     python3 - <<'PY' || true
 import urllib.request
