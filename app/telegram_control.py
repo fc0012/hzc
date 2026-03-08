@@ -1,6 +1,5 @@
 import asyncio
 import time
-import shlex
 import httpx
 from app.config import settings
 from app.runtime_config import RuntimeConfig
@@ -169,16 +168,15 @@ class TelegramControl:
                 "  fi; "
                 "fi; "
                 "docker rm -f hzc-upgrader-lock >/dev/null 2>&1 || true; "
-                "if command -v docker-compose >/dev/null 2>&1; then COMPOSE_RUN='docker-compose'; "
-                "elif docker compose version >/dev/null 2>&1; then COMPOSE_RUN='docker compose'; "
+                "if command -v docker-compose >/dev/null 2>&1; then "
+                "  CID=$(docker-compose run -d --name hzc-upgrader-lock --no-deps --entrypoint bash hetzner-traffic-guard -lc \"cd /opt/hzc && timeout 1800 ./scripts/upgrade.sh > /opt/hzc/state/upgrade.log 2>&1 || true\"); "
+                "elif docker compose version >/dev/null 2>&1; then "
+                "  CID=$(docker compose run -d --name hzc-upgrader-lock --no-deps --entrypoint bash hetzner-traffic-guard -lc \"cd /opt/hzc && timeout 1800 ./scripts/upgrade.sh > /opt/hzc/state/upgrade.log 2>&1 || true\"); "
                 "else echo '__NO_COMPOSE__'; exit 13; fi; "
-                "CID=$($COMPOSE_RUN run -d --name hzc-upgrader-lock --no-deps "
-                "--entrypoint bash hetzner-traffic-guard "
-                "-lc \"cd /opt/hzc && timeout 1800 ./scripts/upgrade.sh > /opt/hzc/state/upgrade.log 2>&1 || true\"); "
                 "echo $CID"
             )
-            p = await asyncio.create_subprocess_shell(
-                f"bash -lc {shlex.quote(upgrade_cmd)}",
+            p = await asyncio.create_subprocess_exec(
+                "bash", "-lc", upgrade_cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
