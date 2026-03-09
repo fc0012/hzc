@@ -551,10 +551,10 @@ class MonitorService:
         }
 
     async def rebuild_with_snapshot_manual(self, server_id: int, image_id):
-        # Rebuild by replacing server while keeping original Primary IP(s):
-        # 1) unassign old server's primary IP(s) and wait action success
-        # 2) delete old server
-        # 3) create new server with same config + original primary IP(s)
+        # Fast-first rebuild strategy:
+        # 1) direct delete old server (expect Primary IP to become unassigned)
+        # 2) create new server with same config + original Primary IP(s)
+        # 3) fallback to safe flow (poweroff+unassign) only if needed
         srv = await self.client.get_server(server_id)
         if not srv:
             return {"ok": False, "error": "server not found"}
@@ -572,7 +572,7 @@ class MonitorService:
         ipv6_id = ((net.get("ipv6") or {}).get("id"))
 
         async def _wait_action_success(action_id: int, title: str):
-            for _ in range(90):  # up to ~7.5 min
+            for _ in range(90):
                 act = await self.client.get_action(action_id)
                 st = (act or {}).get("status")
                 if st == "success":
@@ -582,30 +582,10 @@ class MonitorService:
                 await asyncio.sleep(5)
             raise RuntimeError(f"{title} action timeout: {action_id}")
 
-        try:
-            # Hetzner 要求解绑 Primary IP 前服务器需处于关机状态
-            pof = await self.client.server_action(server_id, 'poweroff')
-            pof_id = ((pof or {}).get('action') or {}).get('id')
-            if pof_id:
-                await _wait_action_success(int(pof_id), f"poweroff server#{server_id}")
-
-            if ipv4_id:
-                r4 = await self.client.unassign_primary_ip(int(ipv4_id))
-                a4 = ((r4 or {}).get("action") or {}).get("id")
-                if a4:
-                    await _wait_action_success(int(a4), f"unassign ipv4#{ipv4_id}")
-            if ipv6_id:
-                r6 = await self.client.unassign_primary_ip(int(ipv6_id))
-                a6 = ((r6 or {}).get("action") or {}).get("id")
-                if a6:
-                    await _wait_action_success(int(a6), f"unassign ipv6#{ipv6_id}")
-
-            await self.client.delete_server(server_id)
-
-            # 412 常见于 Primary IP 资源状态尚未完成切换，做短暂重试
+        async def _create_with_retry():
             created = None
             last_err = None
-            for i in range(6):
+            for i in range(8):
                 try:
                     created = await self.client.create_server(
                         name=name,
@@ -618,23 +598,58 @@ class MonitorService:
                     break
                 except httpx.HTTPStatusError as e:
                     last_err = e
-                    if e.response is not None and e.response.status_code == 412:
+                    if e.response is not None and e.response.status_code in (412, 422):
                         await asyncio.sleep(3 + i * 2)
                         continue
                     raise
             if created is None and last_err is not None:
                 raise last_err
-        except Exception as e:
-            detail = str(e)
-            if isinstance(e, httpx.HTTPStatusError) and e.response is not None:
+            return created
+
+        try:
+            # FAST path: direct delete first
+            await self.client.delete_server(server_id)
+            created = await _create_with_retry()
+            path = "fast"
+        except Exception:
+            # SAFE fallback (best-effort): if old server still exists, poweroff+unassign then create
+            try:
+                still = await self.client.get_server(server_id)
+            except Exception:
+                still = None
+            if still:
                 try:
-                    detail = f"HTTP {e.response.status_code}: {e.response.text}"
+                    pof = await self.client.server_action(server_id, 'poweroff')
+                    pof_id = ((pof or {}).get('action') or {}).get('id')
+                    if pof_id:
+                        await _wait_action_success(int(pof_id), f"poweroff server#{server_id}")
+                    if ipv4_id:
+                        r4 = await self.client.unassign_primary_ip(int(ipv4_id))
+                        a4 = ((r4 or {}).get("action") or {}).get("id")
+                        if a4:
+                            await _wait_action_success(int(a4), f"unassign ipv4#{ipv4_id}")
+                    if ipv6_id:
+                        r6 = await self.client.unassign_primary_ip(int(ipv6_id))
+                        a6 = ((r6 or {}).get("action") or {}).get("id")
+                        if a6:
+                            await _wait_action_success(int(a6), f"unassign ipv6#{ipv6_id}")
+                    await self.client.delete_server(server_id)
                 except Exception:
-                    detail = str(e)
-            await self.tg.send(
-                f"❌ 重建失败\n服务器ID: {server_id}\n镜像/快照: {image}\n错误: {detail[:900]}"
-            )
-            return {"ok": False, "server_id": server_id, "image_id": image, "error": detail}
+                    pass
+            try:
+                created = await _create_with_retry()
+                path = "safe-fallback"
+            except Exception as e:
+                detail = str(e)
+                if isinstance(e, httpx.HTTPStatusError) and e.response is not None:
+                    try:
+                        detail = f"HTTP {e.response.status_code}: {e.response.text}"
+                    except Exception:
+                        detail = str(e)
+                await self.tg.send(
+                    f"❌ 重建失败\n服务器ID: {server_id}\n镜像/快照: {image}\n错误: {detail[:900]}"
+                )
+                return {"ok": False, "server_id": server_id, "image_id": image, "error": detail}
 
         new_srv = created.get("server", {})
         await self.tg.send(
@@ -643,6 +658,7 @@ class MonitorService:
             f"新服务器ID: {new_srv.get('id')}\n"
             f"IPv4: {new_srv.get('public_net',{}).get('ipv4',{}).get('ip','-')}\n"
             f"镜像/快照: {image}\n"
+            f"路径: {path}\n"
             f"说明: 已删除旧机，并使用原Primary IP创建同配置新机"
         )
 
@@ -651,6 +667,7 @@ class MonitorService:
             "old_server_id": server_id,
             "new_server": new_srv,
             "image_id": image,
+            "path": path,
             "kept_primary_ip_ids": {
                 "ipv4": int(ipv4_id) if ipv4_id else None,
                 "ipv6": int(ipv6_id) if ipv6_id else None,
