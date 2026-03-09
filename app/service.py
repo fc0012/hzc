@@ -341,7 +341,6 @@ class MonitorService:
 
     async def create_server_manual(self, name: str, server_type: str, location: str, image, primary_ip_id: int | None = None, primary_ipv6_id: int | None = None):
         created = None
-        placement_fallback_used = False
         try:
             # placement 波动下先按原参数重试几次
             last_err = None
@@ -368,31 +367,9 @@ class MonitorService:
                         continue
                     raise
 
-            # 若机房 placement 不可用，且未绑定 primary IP，则放宽为不指定 location 再尝试
+            # 不允许跨机房兜底：placement 不可用时直接失败并返回明确错误
             if created is None and isinstance(last_err, httpx.HTTPStatusError):
-                code = None
-                try:
-                    code = (last_err.response.json().get("error") or {}).get("code")
-                except Exception:
-                    pass
-                if (
-                    last_err.response is not None
-                    and last_err.response.status_code == 412
-                    and code == "resource_unavailable"
-                    and primary_ip_id is None
-                    and primary_ipv6_id is None
-                ):
-                    created = await self.client.create_server(
-                        name=name,
-                        server_type=server_type,
-                        location=None,
-                        image=image,
-                        primary_ip_id=None,
-                        primary_ipv6_id=None,
-                    )
-                    placement_fallback_used = True
-                elif created is None:
-                    raise last_err
+                raise last_err
 
         except Exception as e:
             detail = str(e)
@@ -418,9 +395,6 @@ class MonitorService:
         sid = srv.get("id")
         sname = srv.get("name", name)
         await self.tg.send(f"🆕 New server created: {sname} (ID: {sid})")
-        if placement_fallback_used:
-            created["placement_fallback_used"] = True
-            await self.tg.send("ℹ️ 创建已自动兜底：原机房 placement 不可用，已改为自动机房分配。")
 
         # Try directly from create response, fallback to reset-password workflow.
         pwd = self._extract_password(created)
