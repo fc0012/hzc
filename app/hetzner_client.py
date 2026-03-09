@@ -183,13 +183,14 @@ class HetznerClient:
             r.raise_for_status()
             return r.json()
 
-    async def create_server(self, *, name: str, server_type: str, location: str, image, primary_ip_id: int | None = None, primary_ipv6_id: int | None = None):
+    async def create_server(self, *, name: str, server_type: str, location: str | None, image, primary_ip_id: int | None = None, primary_ipv6_id: int | None = None):
         payload = {
             "name": name,
             "server_type": server_type,
-            "location": location,
             "image": image,
         }
+        if location:
+            payload["location"] = location
         if primary_ip_id is not None or primary_ipv6_id is not None:
             public_net = {"enable_ipv4": True, "enable_ipv6": True}
             if primary_ip_id is not None:
