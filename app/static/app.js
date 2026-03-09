@@ -221,7 +221,7 @@ function openQBWeb(serverId, ip){
 
 function typeFamily(name=''){return name.replace(/[0-9].*$/,'')}
 function monthlyPriceForType(t,loc){if(!t?.prices?.length) return Number.POSITIVE_INFINITY;const ex=t.prices.find(p=>p.location===loc);const p=ex||t.prices[0];return Number(p?.price_monthly?.gross||999999)}
-function stockState(t,loc){const has=(t.prices||[]).some(p=>p.location===loc);if(!has) return '缺货';if((CURRENT_SERVERS||[]).length>=3) return '紧张';return '有货'}
+function stockState(t,loc){const has=(t.prices||[]).some(p=>p.location===loc);if(!has) return '该机房不可售';return '可售(库存未知)'}
 
 function renderTypeOptions(){
   const loc=byId('c_location').value,cores=Number(byId('f_cores').value||0),mem=Number(byId('f_mem').value||0),fam=byId('f_family').value
@@ -246,7 +246,7 @@ async function loadMeta(showToast=false){
   byId('f_mem').onchange=renderTypeOptions
   byId('f_family').onchange=renderTypeOptions
   renderTypeOptions()
-  if(showToast) toast('库存已刷新')
+  if(showToast) toast('机型可售信息已刷新（实时库存需以下单结果为准）')
 }
 
 function showTypePrice(){
@@ -254,7 +254,7 @@ function showTypePrice(){
   let txt='',est='',st=''
   if(t){const p=t.prices?.find(x=>x.location===loc)||t.prices?.[0],state=stockState(t,loc);st=`库存状态：${state}`;if(p?.price_monthly?.gross){const pm=Number(p.price_monthly.gross||0).toFixed(2);txt=`约 €${pm} /月（${p.location}）`;est=`创建前费用预估：月费 €${pm}（不含超额流量）`}}
   byId('typePrice').textContent=txt;byId('costEst').textContent=est
-  byId('typeStock').innerHTML=st.replace('有货','<span class="stock-ok">有货</span>').replace('紧张','<span class="stock-warn">紧张</span>').replace('缺货','<span class="stock-bad">缺货</span>')
+  byId('typeStock').innerHTML=st.replace('可售(库存未知)','<span class="stock-warn">可售(库存未知)</span>').replace('该机房不可售','<span class="stock-bad">该机房不可售</span>')
 }
 
 function refreshPrimaryIpOptions(){
