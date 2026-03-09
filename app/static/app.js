@@ -466,7 +466,7 @@ async function submitRebuild(){
   const r=await fetch(`/api/rebuild/${sid}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({image_id:imageId})})
   const d=await r.json()
   if(!r.ok||!d?.ok){alert(d?.detail||d?.error||'重建失败');return}
-  toast('重建已提交：删除旧机并用原IP创建同配置新机')
+  toast(`重建任务已入队后台执行${d?.job_id?`（任务ID: ${d.job_id}）`:''}`)
   closeRebuildModal(); loadAll(false)
 }
 
@@ -480,7 +480,7 @@ async function submitFullRebuild(){
   const r=await fetch(`/api/rebuild_full/${sid}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({image_id:imageId})})
   const d=await r.json()
   if(!r.ok||!d?.ok){alert(d?.detail||d?.error||'完全重建失败');return}
-  toast('完全重建已提交（将更换IP）')
+  toast(`完全重建任务已入队后台执行${d?.job_id?`（任务ID: ${d.job_id}）`:''}`)
   closeRebuildModal(); loadAll(false)
 }
 
@@ -587,12 +587,12 @@ async function submitCreate(){
       d={error:t}
     }
 
-    if(!r.ok || !d?.server){
+    if(!r.ok || !d?.ok){
       alert(d?.detail||d?.error||`创建失败（HTTP ${r.status}）`)
       return
     }
 
-    toast('创建任务已提交')
+    toast(`创建任务已入队后台执行${d?.job_id?`（任务ID: ${d.job_id}）`:''}`)
     closeCreateModal()
     loadData()
   }catch(e){

@@ -6,6 +6,7 @@ from fastapi.templating import Jinja2Templates
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from pydantic import BaseModel
 import asyncio
+import uuid
 
 from app.config import settings
 from app.service import monitor
@@ -29,6 +30,29 @@ templates = Jinja2Templates(directory='app/templates')
 
 scheduler = AsyncIOScheduler(timezone=settings.timezone)
 tg_control = TelegramControl(monitor)
+
+JOBS: dict[str, dict] = {}
+
+
+def _queue_job(kind: str, coro):
+    job_id = uuid.uuid4().hex[:12]
+    JOBS[job_id] = {"id": job_id, "kind": kind, "status": "queued"}
+
+    async def _runner():
+        JOBS[job_id]["status"] = "running"
+        try:
+            res = await coro
+            JOBS[job_id]["status"] = "success" if (isinstance(res, dict) and res.get("ok", True)) else "error"
+            JOBS[job_id]["result"] = res
+            if isinstance(res, dict) and (res.get("ok") is False):
+                await monitor.tg.send(f"❌ 后台任务失败\n类型: {kind}\n任务ID: {job_id}\n错误: {str(res.get('error','unknown'))[:800]}")
+        except Exception as e:
+            JOBS[job_id]["status"] = "error"
+            JOBS[job_id]["error"] = str(e)
+            await monitor.tg.send(f"❌ 后台任务异常\n类型: {kind}\n任务ID: {job_id}\n错误: {str(e)[:800]}")
+
+    asyncio.create_task(_runner())
+    return job_id
 
 
 class CreateServerReq(BaseModel):
@@ -196,14 +220,16 @@ async def rotate(server_id: int):
 async def rebuild(server_id: int, req: RebuildReq):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
-    return await monitor.rebuild_with_snapshot_manual(server_id, req.image_id)
+    job_id = _queue_job("rebuild", monitor.rebuild_with_snapshot_manual(server_id, req.image_id))
+    return {"ok": True, "queued": True, "job_id": job_id, "message": "rebuild started in background"}
 
 
 @app.post('/api/rebuild_full/{server_id}')
 async def rebuild_full(server_id: int, req: RebuildReq):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
-    return await monitor.rebuild_full_manual(server_id, req.image_id)
+    job_id = _queue_job("rebuild_full", monitor.rebuild_full_manual(server_id, req.image_id))
+    return {"ok": True, "queued": True, "job_id": job_id, "message": "full rebuild started in background"}
 
 
 @app.get('/api/safe_mode')
@@ -235,14 +261,18 @@ async def snapshot(server_id: int, req: SnapshotReq | None = None):
 async def create_server(req: CreateServerReq):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
-    return await monitor.create_server_manual(
-        name=req.name,
-        server_type=req.server_type,
-        location=req.location,
-        image=req.image,
-        primary_ip_id=req.primary_ip_id,
-        primary_ipv6_id=req.primary_ipv6_id,
+    job_id = _queue_job(
+        "create_server",
+        monitor.create_server_manual(
+            name=req.name,
+            server_type=req.server_type,
+            location=req.location,
+            image=req.image,
+            primary_ip_id=req.primary_ip_id,
+            primary_ipv6_id=req.primary_ipv6_id,
+        ),
     )
+    return {"ok": True, "queued": True, "job_id": job_id, "message": "create started in background"}
 
 
 @app.delete('/api/snapshot/{image_id}')
