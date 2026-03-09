@@ -465,7 +465,7 @@ class MonitorService:
 
     async def rebuild_with_snapshot_manual(self, server_id: int, image_id):
         # Rebuild by replacing server while keeping original Primary IP(s):
-        # 1) unassign old server's primary IP(s)
+        # 1) unassign old server's primary IP(s) and wait action success
         # 2) delete old server
         # 3) create new server with same config + original primary IP(s)
         srv = await self.client.get_server(server_id)
@@ -484,21 +484,44 @@ class MonitorService:
         ipv4_id = ((net.get("ipv4") or {}).get("id"))
         ipv6_id = ((net.get("ipv6") or {}).get("id"))
 
-        if ipv4_id:
-            await self.client.unassign_primary_ip(int(ipv4_id))
-        if ipv6_id:
-            await self.client.unassign_primary_ip(int(ipv6_id))
+        async def _wait_action_success(action_id: int, title: str):
+            for _ in range(90):  # up to ~7.5 min
+                act = await self.client.get_action(action_id)
+                st = (act or {}).get("status")
+                if st == "success":
+                    return True
+                if st == "error":
+                    raise RuntimeError(f"{title} action failed: {act}")
+                await asyncio.sleep(5)
+            raise RuntimeError(f"{title} action timeout: {action_id}")
 
-        await self.client.delete_server(server_id)
+        try:
+            if ipv4_id:
+                r4 = await self.client.unassign_primary_ip(int(ipv4_id))
+                a4 = ((r4 or {}).get("action") or {}).get("id")
+                if a4:
+                    await _wait_action_success(int(a4), f"unassign ipv4#{ipv4_id}")
+            if ipv6_id:
+                r6 = await self.client.unassign_primary_ip(int(ipv6_id))
+                a6 = ((r6 or {}).get("action") or {}).get("id")
+                if a6:
+                    await _wait_action_success(int(a6), f"unassign ipv6#{ipv6_id}")
 
-        created = await self.client.create_server(
-            name=name,
-            server_type=server_type,
-            location=location,
-            image=image,
-            primary_ip_id=int(ipv4_id) if ipv4_id else None,
-            primary_ipv6_id=int(ipv6_id) if ipv6_id else None,
-        )
+            await self.client.delete_server(server_id)
+
+            created = await self.client.create_server(
+                name=name,
+                server_type=server_type,
+                location=location,
+                image=image,
+                primary_ip_id=int(ipv4_id) if ipv4_id else None,
+                primary_ipv6_id=int(ipv6_id) if ipv6_id else None,
+            )
+        except Exception as e:
+            await self.tg.send(
+                f"❌ 重建失败\n服务器ID: {server_id}\n镜像/快照: {image}\n错误: {str(e)[:700]}"
+            )
+            return {"ok": False, "server_id": server_id, "image_id": image, "error": str(e)}
 
         new_srv = created.get("server", {})
         await self.tg.send(
