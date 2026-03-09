@@ -496,6 +496,12 @@ class MonitorService:
             raise RuntimeError(f"{title} action timeout: {action_id}")
 
         try:
+            # Hetzner 要求解绑 Primary IP 前服务器需处于关机状态
+            pof = await self.client.server_action(server_id, 'poweroff')
+            pof_id = ((pof or {}).get('action') or {}).get('id')
+            if pof_id:
+                await _wait_action_success(int(pof_id), f"poweroff server#{server_id}")
+
             if ipv4_id:
                 r4 = await self.client.unassign_primary_ip(int(ipv4_id))
                 a4 = ((r4 or {}).get("action") or {}).get("id")
