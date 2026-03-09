@@ -1,5 +1,6 @@
 import asyncio
 import datetime as dt
+import httpx
 from app.config import settings
 from app.hetzner_client import HetznerClient
 from app.telegram_bot import Tg
@@ -515,19 +516,39 @@ class MonitorService:
 
             await self.client.delete_server(server_id)
 
-            created = await self.client.create_server(
-                name=name,
-                server_type=server_type,
-                location=location,
-                image=image,
-                primary_ip_id=int(ipv4_id) if ipv4_id else None,
-                primary_ipv6_id=int(ipv6_id) if ipv6_id else None,
-            )
+            # 412 常见于 Primary IP 资源状态尚未完成切换，做短暂重试
+            created = None
+            last_err = None
+            for i in range(6):
+                try:
+                    created = await self.client.create_server(
+                        name=name,
+                        server_type=server_type,
+                        location=location,
+                        image=image,
+                        primary_ip_id=int(ipv4_id) if ipv4_id else None,
+                        primary_ipv6_id=int(ipv6_id) if ipv6_id else None,
+                    )
+                    break
+                except httpx.HTTPStatusError as e:
+                    last_err = e
+                    if e.response is not None and e.response.status_code == 412:
+                        await asyncio.sleep(3 + i * 2)
+                        continue
+                    raise
+            if created is None and last_err is not None:
+                raise last_err
         except Exception as e:
+            detail = str(e)
+            if isinstance(e, httpx.HTTPStatusError) and e.response is not None:
+                try:
+                    detail = f"HTTP {e.response.status_code}: {e.response.text}"
+                except Exception:
+                    detail = str(e)
             await self.tg.send(
-                f"❌ 重建失败\n服务器ID: {server_id}\n镜像/快照: {image}\n错误: {str(e)[:700]}"
+                f"❌ 重建失败\n服务器ID: {server_id}\n镜像/快照: {image}\n错误: {detail[:900]}"
             )
-            return {"ok": False, "server_id": server_id, "image_id": image, "error": str(e)}
+            return {"ok": False, "server_id": server_id, "image_id": image, "error": detail}
 
         new_srv = created.get("server", {})
         await self.tg.send(
