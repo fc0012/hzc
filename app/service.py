@@ -65,6 +65,8 @@ class MonitorService:
                     "memory": t.get("memory"),
                     "disk": t.get("disk"),
                     "prices": t.get("prices", []),
+                    # API可售性（非实时库存）：根据 Hetzner server_types.prices 是否包含该 location
+                    "sellable_locations": [p.get("location") for p in (t.get("prices") or []) if p.get("location")],
                 }
                 for t in types
             ],
