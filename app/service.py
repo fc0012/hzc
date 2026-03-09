@@ -211,16 +211,42 @@ class MonitorService:
         for row in rows:
             pol = row.get("auto_policy") or {}
             enabled = bool(pol.get("enabled", False))
+            threshold = float(pol.get("threshold", settings.rotate_threshold))
+            used_tb = float(row.get("used_tb", 0) or 0)
+            over = bool(row.get("over_threshold", False))
+
+            # 仅在“接近阈值/已超阈值”场景发策略日志，避免刷屏
+            near_threshold = used_tb >= (threshold * 0.9)
+
             if not enabled:
+                if over or near_threshold:
+                    await self.tg.send(
+                        f"ℹ️ 自动重建未执行: {row['name']} (ID:{row['id']})\n"
+                        f"原因: 策略未启用\n"
+                        f"当前: {used_tb:.2f} TB / 阈值: {threshold:.2f} TB"
+                    )
                 continue
-            if row["over_threshold"]:
+
+            if over:
                 if safe_mode:
-                    await self.tg.send(f"⚠️ SAFE_MODE 告警: {row['name']} 达到自动阈值 {pol.get('threshold', settings.rotate_threshold)}，仅通知不执行")
+                    await self.tg.send(
+                        f"⚠️ SAFE_MODE 告警: {row['name']} (ID:{row['id']}) 达到自动阈值 {threshold:.2f} TB，"
+                        f"当前 {used_tb:.2f} TB，仅通知不执行"
+                    )
                     continue
                 image_id = pol.get("image_id")
                 if not image_id:
-                    await self.tg.send(f"⚠️ {row['name']} 达到阈值，但未配置重建镜像/快照，已跳过")
+                    await self.tg.send(
+                        f"⚠️ 自动重建未执行: {row['name']} (ID:{row['id']})\n"
+                        f"原因: 未配置重建镜像/快照\n"
+                        f"当前: {used_tb:.2f} TB / 阈值: {threshold:.2f} TB"
+                    )
                     continue
+                await self.tg.send(
+                    f"🚀 自动重建开始: {row['name']} (ID:{row['id']})\n"
+                    f"当前: {used_tb:.2f} TB / 阈值: {threshold:.2f} TB\n"
+                    f"镜像/快照: {image_id}"
+                )
                 await self.rebuild_with_snapshot_manual(row["id"], image_id)
 
     async def rotate_server(self, server_id: int):
