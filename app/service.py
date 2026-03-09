@@ -340,14 +340,35 @@ class MonitorService:
         return {"ok": True, "server_id": server_id, "new_password": None, "note": "password not returned by api response"}
 
     async def create_server_manual(self, name: str, server_type: str, location: str, image, primary_ip_id: int | None = None, primary_ipv6_id: int | None = None):
-        created = await self.client.create_server(
-            name=name,
-            server_type=server_type,
-            location=location,
-            image=image,
-            primary_ip_id=primary_ip_id,
-            primary_ipv6_id=primary_ipv6_id,
-        )
+        try:
+            created = await self.client.create_server(
+                name=name,
+                server_type=server_type,
+                location=location,
+                image=image,
+                primary_ip_id=primary_ip_id,
+                primary_ipv6_id=primary_ipv6_id,
+            )
+        except Exception as e:
+            detail = str(e)
+            if isinstance(e, httpx.HTTPStatusError) and e.response is not None:
+                try:
+                    detail = f"HTTP {e.response.status_code}: {e.response.text}"
+                except Exception:
+                    detail = str(e)
+            return {
+                "ok": False,
+                "error": detail,
+                "request": {
+                    "name": name,
+                    "server_type": server_type,
+                    "location": location,
+                    "image": image,
+                    "primary_ip_id": primary_ip_id,
+                    "primary_ipv6_id": primary_ipv6_id,
+                },
+            }
+
         srv = created.get("server", {})
         sid = srv.get("id")
         sname = srv.get("name", name)
