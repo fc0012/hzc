@@ -199,17 +199,54 @@ class TelegramControl:
             txt = (out.decode("utf-8", errors="ignore") or "no-log").strip()
             lines = txt.splitlines()
 
+            # Detect running upgrader task to avoid false "未确认成功" right after trigger
+            rp = await asyncio.create_subprocess_shell(
+                "bash -lc 'docker ps --format \"{{.Names}} {{.Status}}\" 2>/dev/null | grep "
+                "-E ""^hzc-upgrader-[0-9]+ "" | head -n 1 || true'",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            rout, _ = await rp.communicate()
+            running_line = (rout.decode("utf-8", errors="ignore") if rout else "").strip()
+            running = bool(running_line)
+
             def pick(prefix: str):
                 for ln in reversed(lines):
                     if prefix in ln:
                         return ln.strip()
                 return ""
 
-            status = "✅ 成功" if "[ok] 升级完成" in txt else "⚠️ 未确认成功"
+            has_ok = "[ok] 升级完成" in txt
+            has_fail = "[x]" in txt
+
+            if running and not has_ok and not has_fail:
+                status = "⏳ 升级进行中"
+            elif has_ok:
+                status = "✅ 成功"
+            else:
+                status = "⚠️ 未确认成功"
+
             head_line = pick("代码已对齐 origin/main")
-            health_ok = "是" if "[i] 健康检查 /api/ping ..." in txt and "[x] 升级后健康检查失败" not in txt else "否"
+            if not head_line:
+                head_line = pick("升级失败：代码未对齐 origin/main")
+
+            if "[x] 升级后健康检查失败" in txt:
+                health_ok = "否"
+            elif "[i] 健康检查 /api/ping ..." in txt and has_ok:
+                health_ok = "是"
+            elif running:
+                health_ok = "进行中"
+            else:
+                health_ok = "未识别"
+
             fail_line = pick("[x]")
             ps_line = pick("hetzner-traffic-guard")
+            if running and not ps_line:
+                ps_line = running_line
+
+            if txt.strip() == "no-log":
+                fail_line = fail_line or "未找到升级日志文件（/opt/hzc/state/upgrade.log）"
+
             msg = (
                 f"📜 升级摘要\n"
                 f"状态：{status}\n"
