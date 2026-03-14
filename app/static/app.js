@@ -7,6 +7,19 @@ let AUTO_POLICIES={}
 let __rowHtmlCache={}
 let __qbHtmlCache={}
 
+const CACHE_KEYS={
+  servers:'hzc.cache.servers',
+  meta:'hzc.cache.meta',
+  ts:'hzc.cache.ts'
+}
+
+function setCache(k,v){
+  try{ localStorage.setItem(k, JSON.stringify(v)) }catch(e){}
+}
+function getCache(k){
+  try{ const s=localStorage.getItem(k); return s?JSON.parse(s):null }catch(e){ return null }
+}
+
 const toast=(msg)=>{const t=byId('toast');t.textContent=msg;t.classList.remove('hidden');clearTimeout(window.__toastT);window.__toastT=setTimeout(()=>t.classList.add('hidden'),2200)}
 
 function toggleTheme(){const b=document.body;const n=b.dataset.theme==='dark'?'light':'dark';b.dataset.theme=n;localStorage.setItem('theme',n);byId('themeBtn').textContent=n==='dark'?'☀️ 浅色':'🌙 深色'}
@@ -233,6 +246,8 @@ function renderTypeOptions(){
 
 async function loadMeta(showToast=false){
   const r=await fetch('/api/meta'); META=await r.json()
+  setCache(CACHE_KEYS.meta, META)
+  setCache(CACHE_KEYS.ts, Date.now())
   if(byId('appVersion')) byId('appVersion').textContent = META.app_version || '--'
   byId('c_location').innerHTML=META.locations.map(l=>`<option value="${l.name}">${l.name} (${l.city||''})</option>`).join('')
   const fams=[...new Set(META.server_types.map(t=>typeFamily(t.name)).filter(Boolean))].sort()
@@ -300,6 +315,8 @@ async function loadData(showToast=false){
   __loadingData=true
   try{
     const kw=((byId('kw')?.value)||'').trim().toLowerCase(),r=await fetch('/api/servers'),data=await r.json(); CURRENT_SERVERS=data
+    setCache(CACHE_KEYS.servers, data)
+    setCache(CACHE_KEYS.ts, Date.now())
     renderCards(data)
     const f=data.filter(x=>!kw||String(x.name).toLowerCase().includes(kw)||String(x.ip||'').toLowerCase().includes(kw)||String(x.id).includes(kw))
     patchTableRows(f)
@@ -386,18 +403,28 @@ async function toggleSafeMode(){
   loadSafeMode()
 }
 
+function bootstrapFromCache(){
+  const cachedServers=getCache(CACHE_KEYS.servers)
+  const cachedMeta=getCache(CACHE_KEYS.meta)
+  if(cachedMeta){
+    META=cachedMeta
+    if(byId('appVersion')) byId('appVersion').textContent = META.app_version || '--'
+  }
+  if(Array.isArray(cachedServers) && cachedServers.length){
+    CURRENT_SERVERS=cachedServers
+    renderCards(cachedServers)
+    patchTableRows(cachedServers)
+  }
+}
+
 async function loadAll(showToast=false){
-  // 先加载主列表，保证首屏尽快可见
-  await loadData(false)
-
-  // 元数据/配置并行加载，避免阻塞首屏交互
-  await Promise.allSettled([loadMeta(false),loadQBNodes(),loadAutoPolicies(),loadSafeMode()])
-  loadQBRealtime()
-
-  // 图表较重，滚动到模块附近再加载
-  lazyLoadDailyOnce()
-
-  if(showToast) toast('全部数据已刷新')
+  // 非阻塞刷新：页面先显示缓存，再后台并行刷新
+  const tasks=[loadData(false),loadMeta(false),loadQBNodes(),loadAutoPolicies(),loadSafeMode()]
+  Promise.allSettled(tasks).then(()=>{
+    loadQBRealtime()
+    lazyLoadDailyOnce()
+    if(showToast) toast('全部数据已刷新')
+  })
 }
 
 async function renameServer(id, oldName){
@@ -771,6 +798,7 @@ async function deleteQBNode(){
 
 if(byId('kw')) byId('kw').addEventListener('input',()=>loadData(false))
 initTheme();
+bootstrapFromCache()
 loadAll(false)
 // layered refresh: qB high-frequency, others lower frequency
 setInterval(()=>{ if(!document.hidden) loadQBRealtime() }, 3000)
