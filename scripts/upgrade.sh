@@ -123,6 +123,24 @@ if [ -z "$APP_META" ]; then
 fi
 
 echo "[ok] 升级完成"
+
+echo "[i] 清理历史镜像与构建缓存（保留当前运行所需）..."
+set +e
+# 1) 清理悬空镜像（<none>）
+docker image prune -f >/dev/null 2>&1
+# 2) 清理无用构建缓存（7天前）
+docker builder prune -f --filter "until=168h" >/dev/null 2>&1
+# 3) 尝试删除本项目旧镜像（保留 compose 当前正在用的镜像）
+INUSE_IDS="$($COMPOSE_CMD images -q 2>/dev/null | sort -u)"
+for repo in "hetzner-traffic-guard" "hzc-hetzner-traffic-guard"; do
+  ALL_IDS="$(docker images --format '{{.Repository}} {{.ID}}' | awk -v r="$repo" '$1==r{print $2}' | sort -u)"
+  for img in $ALL_IDS; do
+    echo "$INUSE_IDS" | grep -q "$img" && continue
+    docker rmi "$img" >/dev/null 2>&1 || true
+  done
+done
+set -e
+
 echo "状态："
 $COMPOSE_CMD ps
 
