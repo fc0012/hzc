@@ -7,6 +7,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from pydantic import BaseModel
 import asyncio
 import uuid
+import time
 
 from app.config import settings
 from app.service import monitor
@@ -207,6 +208,51 @@ async def service_restart():
     p = await asyncio.create_subprocess_shell(cmd)
     await p.communicate()
     return {"ok": True, "message": "restart triggered"}
+
+
+@app.post('/api/upgrade')
+async def api_upgrade():
+    now = int(time.time())
+    rc = monitor.runtime.get()
+    last_ts = int(rc.get("last_upgrade_trigger_ts") or 0)
+    if now - last_ts < 25:
+        return {"ok": False, "error": "已有升级请求刚触发，请勿重复点击（25秒内防抖）"}
+
+    upgrade_cmd = (
+        "set -e; mkdir -p /opt/hzc/state; cd /opt/hzc; "
+        "git fetch origin main >/dev/null 2>&1 || { echo '__FETCH_FAILED__'; exit 14; }; "
+        "LOCAL=$(git rev-parse HEAD 2>/dev/null || true); REMOTE=$(git rev-parse origin/main 2>/dev/null || true); "
+        "if [ -n \"$LOCAL\" ] && [ \"$LOCAL\" = \"$REMOTE\" ]; then echo '__UPGRADE_UPTODATE__'; exit 11; fi; "
+        "if command -v docker-compose >/dev/null 2>&1; then "
+        "  TASK_NAME=hzc-upgrader-$(date +%s); "
+        "  CID=$(docker-compose run -d --rm --name $TASK_NAME --no-deps --entrypoint bash hetzner-traffic-guard -lc \"cd /opt/hzc && timeout 1800 ./scripts/upgrade.sh > /opt/hzc/state/upgrade.log 2>&1 || true\"); "
+        "elif docker compose version >/dev/null 2>&1; then "
+        "  TASK_NAME=hzc-upgrader-$(date +%s); "
+        "  CID=$(docker compose run -d --rm --name $TASK_NAME --no-deps --entrypoint bash hetzner-traffic-guard -lc \"cd /opt/hzc && timeout 1800 ./scripts/upgrade.sh > /opt/hzc/state/upgrade.log 2>&1 || true\"); "
+        "else echo '__NO_COMPOSE__'; exit 13; fi; "
+        "echo $CID"
+    )
+    p = await asyncio.create_subprocess_exec(
+        "bash", "-lc", upgrade_cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    out, err = await p.communicate()
+    so = (out.decode("utf-8", errors="ignore") if out else "").strip()
+    se = (err.decode("utf-8", errors="ignore") if err else "").strip()
+
+    if p.returncode != 0:
+        if "__UPGRADE_UPTODATE__" in so:
+            return {"ok": True, "up_to_date": True, "message": "当前已是最新版本，无需升级。"}
+        if "__NO_COMPOSE__" in so:
+            return {"ok": False, "error": "未检测到 docker compose / docker-compose"}
+        if "__FETCH_FAILED__" in so:
+            return {"ok": False, "error": "拉取远端版本信息失败，请稍后重试。"}
+        return {"ok": False, "error": (se or so or "unknown error")[-700:]}
+
+    monitor.runtime.update({"last_upgrade_trigger_ts": now})
+    cid = (out.decode("utf-8", errors="ignore") if out else "").strip().splitlines()[-1][:24]
+    return {"ok": True, "queued": True, "task_id": cid or "n/a", "message": "升级任务已触发"}
 
 
 @app.post('/api/rotate/{server_id}')

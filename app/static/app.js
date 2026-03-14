@@ -526,6 +526,22 @@ async function restartService(){
   toast('服务重启已触发，稍后请刷新页面')
 }
 
+async function triggerUpgrade(){
+  if(!confirm('确认执行一键升级？将拉取最新版并重建容器。')) return
+  const r=await fetch('/api/upgrade',{method:'POST'})
+  const d=await r.json()
+  if(!r.ok||!d?.ok){
+    alert(d?.detail||d?.error||'升级触发失败')
+    return
+  }
+  if(d?.up_to_date){
+    toast('当前已是最新版本')
+    return
+  }
+  toast(`升级任务已触发（task: ${d?.task_id||'n/a'}）`)
+  alert('升级已在后台执行。\n可在 TG 里查看【升级日志】。')
+}
+
 async function saveTGConfig(restartAfter=false){
   const body={telegram_bot_token:byId('tg_token').value.trim(), telegram_chat_id:byId('tg_chat').value.trim()}
   if(!body.telegram_bot_token || !body.telegram_chat_id){ alert('请填写 Bot Token 和 Chat ID'); return }
