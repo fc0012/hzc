@@ -220,25 +220,67 @@ class MonitorService:
     async def rotate_if_needed(self):
         rows = await self.collect(use_cache=False)
         safe_mode = self.get_safe_mode()
+        now = int(dt.datetime.utcnow().timestamp())
+
+        rc = self.runtime.get()
+        guard_state = rc.get("traffic_guard_state") or {}
+        if not isinstance(guard_state, dict):
+            guard_state = {}
+
         for row in rows:
+            sid = str(row.get("id"))
             pol = row.get("auto_policy") or {}
             enabled = bool(pol.get("enabled", False))
             threshold = float(pol.get("threshold", settings.rotate_threshold))
             used_tb = float(row.get("used_tb", 0) or 0)
             over = bool(row.get("over_threshold", False))
+            limit_tb = float(row.get("limit_tb", 20) or 20)
 
-            # 仅在“接近阈值/已超阈值”场景发策略日志，避免刷屏
-            near_threshold = used_tb >= (threshold * 0.9)
+            st = guard_state.get(sid) or {}
+            if not isinstance(st, dict):
+                st = {}
 
+            # 需求变更：未开启重建策略时，
+            # - >=19TB: 每10分钟提醒一次
+            # - >=20TB: 自动关机（只执行一次并告警）
             if not enabled:
-                if over or near_threshold:
-                    await self.tg.send(
-                        f"ℹ️ 自动重建未执行: {row['name']} (ID:{row['id']})\n"
-                        f"原因: 策略未启用\n"
-                        f"当前: {used_tb:.2f} TB / 阈值: {threshold:.2f} TB"
-                    )
+                if used_tb >= limit_tb:
+                    if not st.get("auto_stopped"):
+                        try:
+                            await self.client.server_action(int(row["id"]), "poweroff")
+                            st["auto_stopped"] = True
+                            st["last_stop_ts"] = now
+                            await self.tg.send(
+                                f"🛑 自动保护已执行: {row['name']} (ID:{row['id']})\n"
+                                f"当前: {used_tb:.2f} TB / 限额: {limit_tb:.2f} TB\n"
+                                f"动作: 已自动关机（因未开启重建策略且达到限额）"
+                            )
+                        except Exception as e:
+                            await self.tg.send(
+                                f"❌ 自动关机失败: {row['name']} (ID:{row['id']})\n"
+                                f"错误: {str(e)[:500]}"
+                            )
+                    guard_state[sid] = st
+                    continue
+
+                if used_tb >= (limit_tb - 1):  # 20TB 限额下即 19TB
+                    last_warn = int(st.get("last_warn_ts") or 0)
+                    if now - last_warn >= 600:  # 10分钟节流
+                        await self.tg.send(
+                            f"⚠️ 流量预警: {row['name']} (ID:{row['id']})\n"
+                            f"当前: {used_tb:.2f} TB / 限额: {limit_tb:.2f} TB\n"
+                            f"说明: 未开启自动重建策略，达到限额将自动关机"
+                        )
+                        st["last_warn_ts"] = now
+                    guard_state[sid] = st
+                    continue
+
+                # 低于19TB时清理状态，避免陈旧节流状态长期保留
+                if st:
+                    guard_state[sid] = {k: v for k, v in st.items() if k not in ("auto_stopped", "last_stop_ts")}
                 continue
 
+            # 有策略时沿用原策略逻辑
             if over:
                 if safe_mode:
                     await self.tg.send(
@@ -260,6 +302,8 @@ class MonitorService:
                     f"镜像/快照: {image_id}"
                 )
                 await self.rebuild_with_snapshot_manual(row["id"], image_id)
+
+        self.runtime.update({"traffic_guard_state": guard_state})
 
     async def rotate_server(self, server_id: int):
         servers = await self.client.list_servers()
