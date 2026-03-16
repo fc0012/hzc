@@ -25,10 +25,6 @@
 
 ![HZC Dashboard](docs/screenshots/dashboard.jpg)
 
-### 删除服务器弹窗（保留IP/快照选项）
-
-![Delete Dialog](docs/screenshots/delete-dialog.jpg)
-
 ### 手机端创建弹窗（已支持可滚动）
 
 ![Mobile Create Modal](docs/screenshots/mobile-create-modal.jpg)
