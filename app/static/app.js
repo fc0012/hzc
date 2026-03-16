@@ -491,7 +491,6 @@ function openDeleteModal(serverId){
   byId('del_make_snapshot').checked=false
   byId('del_keep_ipv4').checked=false
   byId('del_keep_ipv6').checked=false
-  byId('del_keep_mode').value='safe'
 }
 function closeDeleteModal(){ byId('deleteModal').classList.add('hidden') }
 
@@ -501,7 +500,7 @@ async function submitDeleteServer(){
     create_snapshot: !!byId('del_make_snapshot').checked,
     keep_ipv4: !!byId('del_keep_ipv4').checked,
     keep_ipv6: !!byId('del_keep_ipv6').checked,
-    keep_mode: (byId('del_keep_mode')?.value || "safe"),
+    keep_mode: "fast",
   }
   if(!confirm(`高风险确认：将删除服务器 ${sid}。请确认选项无误。`)) return
   const verify = prompt('请输入 DELETE 确认执行：','')

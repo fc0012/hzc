@@ -92,7 +92,7 @@ class DeleteServerReq(BaseModel):
     create_snapshot: bool = False
     keep_ipv4: bool = False
     keep_ipv6: bool = False
-    keep_mode: str = "safe"  # safe|fast
+    keep_mode: str = "fast"  # fast only
 
 
 class TelegramConfigReq(BaseModel):
