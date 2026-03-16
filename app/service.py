@@ -30,8 +30,15 @@ class MonitorService:
         self._daily_cache_ttl = 30.0
 
     async def meta(self):
-        types = await self.client.list_server_types()
-        locations = await self.client.list_locations()
+        # 允许在未配置 HETZNER_TOKEN 时仍返回基础元信息（版本号等）
+        try:
+            types = await self.client.list_server_types()
+        except Exception:
+            types = []
+        try:
+            locations = await self.client.list_locations()
+        except Exception:
+            locations = []
         try:
             snapshots = await self.client.list_snapshots()
         except Exception:
