@@ -226,12 +226,18 @@ async def api_upgrade():
         "git fetch origin main >/dev/null 2>&1 || { echo '__FETCH_FAILED__'; exit 14; }; "
         "LOCAL=$(git rev-parse HEAD 2>/dev/null || true); REMOTE=$(git rev-parse origin/main 2>/dev/null || true); "
         "if [ -n \"$LOCAL\" ] && [ \"$LOCAL\" = \"$REMOTE\" ]; then echo '__UPGRADE_UPTODATE__'; exit 11; fi; "
+        "if ! command -v docker-compose >/dev/null 2>&1 && ! docker compose version >/dev/null 2>&1; then "
+        "  if command -v docker >/dev/null 2>&1 && command -v apt-get >/dev/null 2>&1; then "
+        "    apt-get update >/dev/null 2>&1 && apt-get install -y --no-install-recommends docker-compose-plugin docker-compose >/dev/null 2>&1 || true; "
+        "  fi; "
+        "fi; "
         "if command -v docker-compose >/dev/null 2>&1; then "
         "  TASK_NAME=hzc-upgrader-$(date +%s); "
         "  CID=$(docker-compose run -d --rm --name $TASK_NAME --no-deps --entrypoint bash hetzner-traffic-guard -lc \"cd $ROOT && timeout 1800 ./scripts/upgrade.sh > $ROOT/state/upgrade.log 2>&1\"); "
         "elif docker compose version >/dev/null 2>&1; then "
         "  TASK_NAME=hzc-upgrader-$(date +%s); "
         "  CID=$(docker compose run -d --rm --name $TASK_NAME --no-deps --entrypoint bash hetzner-traffic-guard -lc \"cd $ROOT && timeout 1800 ./scripts/upgrade.sh > $ROOT/state/upgrade.log 2>&1\"); "
+        "elif ! command -v docker >/dev/null 2>&1; then echo '__NO_DOCKER__'; exit 17; "
         "else echo '__NO_COMPOSE__'; exit 13; fi; "
         "echo $CID"
     )
@@ -248,7 +254,9 @@ async def api_upgrade():
         if "__UPGRADE_UPTODATE__" in so:
             return {"ok": True, "up_to_date": True, "message": "当前已是最新版本，无需升级。"}
         if "__NO_COMPOSE__" in so:
-            return {"ok": False, "error": "未检测到 docker compose / docker-compose"}
+            return {"ok": False, "error": "未检测到 docker compose / docker-compose（已尝试自动安装）"}
+        if "__NO_DOCKER__" in so:
+            return {"ok": False, "error": "未检测到 docker，无法执行容器升级"}
         if "__FETCH_FAILED__" in so:
             return {"ok": False, "error": "拉取远端版本信息失败，请稍后重试。"}
         if "__ROOT_NOT_FOUND__" in so:
