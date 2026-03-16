@@ -33,16 +33,26 @@
 
 ## 快速开始（3步）
 
-### 1) 拉取项目
+### 1) 一条命令启动（推荐）
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/liqiba/hzc/main/scripts/bootstrap.sh)
+```
+
+可直接指定动作：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/liqiba/hzc/main/scripts/bootstrap.sh) install
+bash <(curl -fsSL https://raw.githubusercontent.com/liqiba/hzc/main/scripts/bootstrap.sh) upgrade
+bash <(curl -fsSL https://raw.githubusercontent.com/liqiba/hzc/main/scripts/bootstrap.sh) uninstall
+bash <(curl -fsSL https://raw.githubusercontent.com/liqiba/hzc/main/scripts/bootstrap.sh) status
+```
+
+### 2) 本地脚本方式
 
 ```bash
 git clone https://github.com/liqiba/hzc.git
 cd hzc
-```
-
-### 2) 一键安装
-
-```bash
 chmod +x scripts/onekey.sh
 ./scripts/onekey.sh
 ```
