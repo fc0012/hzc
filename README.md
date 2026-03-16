@@ -47,6 +47,15 @@ chmod +x scripts/onekey.sh
 ./scripts/onekey.sh
 ```
 
+脚本内置菜单：安装/升级/卸载/状态检查。也可直接子命令：
+
+```bash
+./scripts/onekey.sh install
+./scripts/onekey.sh upgrade
+./scripts/onekey.sh uninstall
+./scripts/onekey.sh status
+```
+
 > 先填 `HETZNER_TOKEN`，其它配置可后续在页面补充。
 
 ### 3) 打开面板
