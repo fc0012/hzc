@@ -36,22 +36,64 @@
 ### 1) 一条命令启动（推荐）
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/liqiba/hzc/main/scripts/bootstrap.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/fc0012/hzc/main/scripts/bootstrap.sh)
 ```
 
 可直接指定动作：
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/liqiba/hzc/main/scripts/bootstrap.sh) install
-bash <(curl -fsSL https://raw.githubusercontent.com/liqiba/hzc/main/scripts/bootstrap.sh) upgrade
-bash <(curl -fsSL https://raw.githubusercontent.com/liqiba/hzc/main/scripts/bootstrap.sh) uninstall
-bash <(curl -fsSL https://raw.githubusercontent.com/liqiba/hzc/main/scripts/bootstrap.sh) status
+bash <(curl -fsSL https://raw.githubusercontent.com/fc0012/hzc/main/scripts/bootstrap.sh) install
+bash <(curl -fsSL https://raw.githubusercontent.com/fc0012/hzc/main/scripts/bootstrap.sh) upgrade
+bash <(curl -fsSL https://raw.githubusercontent.com/fc0012/hzc/main/scripts/bootstrap.sh) uninstall
+bash <(curl -fsSL https://raw.githubusercontent.com/fc0012/hzc/main/scripts/bootstrap.sh) status
 ```
 
-### 2) 本地脚本方式
+### 2) 使用 Docker 镜像（推荐）
 
 ```bash
-git clone https://github.com/liqiba/hzc.git
+# 拉取镜像
+docker pull ghcr.io/fc0012/hzc:latest
+
+# 运行容器
+docker run -d \
+  --name hetzner-traffic-guard \
+  -p 1227:1227 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e HETZNER_TOKEN=your_token_here \
+  -e WEB_PASSWORD=your_password_here \
+  -e SECRET_KEY=your_secret_key_here \
+  ghcr.io/fc0012/hzc:latest
+```
+
+或使用 docker-compose：
+
+```bash
+# 创建 docker-compose.yml
+cat > docker-compose.yml << 'EOF'
+services:
+  hetzner-traffic-guard:
+    image: ghcr.io/fc0012/hzc:latest
+    container_name: hetzner-traffic-guard
+    restart: unless-stopped
+    ports:
+      - "1227:1227"
+    environment:
+      - HETZNER_TOKEN=your_token_here
+      - WEB_PASSWORD=your_password_here
+      - SECRET_KEY=your_secret_key_here
+    volumes:
+      - ./state:/app/state
+      - /var/run/docker.sock:/var/run/docker.sock
+EOF
+
+# 启动
+docker-compose up -d
+```
+
+### 3) 本地脚本方式
+
+```bash
+git clone https://github.com/fc0012/hzc.git
 cd hzc
 chmod +x scripts/onekey.sh
 ./scripts/onekey.sh
@@ -68,7 +110,7 @@ chmod +x scripts/onekey.sh
 
 > 先填 `HETZNER_TOKEN`，其它配置可后续在页面补充。
 
-### 3) 打开面板
+### 4) 打开面板
 
 ```text
 http://你的服务器IP:1227
