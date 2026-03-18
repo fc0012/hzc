@@ -157,7 +157,6 @@ function rowHtml(r){
       <button class="btn action" onclick="openQBModal(${r.id})">配置qB</button>
       <button class="btn action" onclick="openQBWeb(${r.id}, '${ipText}')">打开qB</button>
       <button class="${policyBtnClass}" onclick="openAutoPolicyModal(${r.id})" title="${policyLabel}">${policyLabel}</button>
-      <button class="btn action" onclick="copySSHCommand('${ipText}')" ${!ipText ? 'disabled' : ''}>SSH</button>
       <button class="btn action" onclick="rebootServer(${r.id})">重启</button>
       <button class="btn action" onclick="hardRebootServer(${r.id})">强制重启</button>
       <button class="btn btn-danger action" onclick="openRebuildModal(${r.id})">重建</button>
@@ -479,19 +478,6 @@ async function hardRebootServer(id){
   toast('强制重启已提交，正在检查开机动作...')
   const aid=d?.poweron_action?.id
   pollAction(aid, `服务器 ${id} 强制重启`)
-}
-
-function copySSHCommand(ip){
-  if(!ip){
-    alert('IP地址不可用')
-    return
-  }
-  const sshCmd = `ssh root@${ip}`
-  navigator.clipboard.writeText(sshCmd).then(() => {
-    alert(`✅ SSH连接命令已复制到剪贴板！\n\n请在终端中粘贴并执行：\n\n${sshCmd}\n\n该命令将连接到服务器。`)
-  }).catch(() => {
-    prompt('请复制以下SSH连接命令并在终端中执行：', sshCmd)
-  })
 }
 
 // 任务进度相关函数
