@@ -246,7 +246,8 @@ async def servers(username: str = Depends(verify_auth)):
 
 
 @app.get('/api/ping')
-async def ping(username: str = Depends(verify_auth)):
+async def ping():
+    """健康检查端点 - 不需要认证"""
     return {"ok": True, "app_version": settings.app_version, "app_commit": settings.app_commit}
 
 
