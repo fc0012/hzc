@@ -69,8 +69,19 @@ do_install() {
   echo "[i] 正在构建并启动..."
   $COMPOSE_CMD up -d --build
 
+  # 创建 hzc 快捷命令
+  HZC_CMD="/usr/local/bin/hzc"
+  PROJECT_DIR="$(pwd)"
+  cat > "$HZC_CMD" <<EOF
+#!/bin/bash
+cd "$PROJECT_DIR" && ./scripts/onekey.sh "\$@"
+EOF
+  chmod +x "$HZC_CMD"
+  echo "[i] 已创建快捷命令: hzc"
+
   echo "[ok] 已启动"
   echo "访问: http://$(hostname -I | awk '{print $1}'):1227"
+  echo "快捷命令: hzc (可直接在终端输入 hzc 唤起管理菜单)"
 }
 
 do_upgrade() {
