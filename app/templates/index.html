@@ -5,8 +5,85 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Hetzner Traffic Guard</title>
   <link rel="stylesheet" href="/static/style.css?v={{ app_version }}" />
+  <style>
+    #setupOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    #setupCard {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 32px;
+      max-width: 400px;
+      width: 90%;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    }
+    #setupCard h2 {
+      margin: 0 0 8px 0;
+      color: var(--text);
+    }
+    #setupCard p {
+      margin: 0 0 24px 0;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+    #setupCard label {
+      display: block;
+      margin-bottom: 16px;
+      color: var(--text);
+    }
+    #setupCard input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--input-bg);
+      color: var(--text);
+      margin-top: 6px;
+      box-sizing: border-box;
+    }
+    #setupCard .btn {
+      width: 100%;
+      margin-top: 8px;
+    }
+    #setupCard .error {
+      color: #f44;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+  </style>
 </head>
 <body data-theme="dark">
+  <!-- 首次设置密码界面 -->
+  <div id="setupOverlay" style="display:none">
+    <div id="setupCard">
+      <h2>🔐 首次设置密码</h2>
+      <p>为了保护面板安全,请设置登录密码</p>
+      <label>
+        用户名
+        <input id="setupUsername" placeholder="admin" value="admin" />
+      </label>
+      <label>
+        密码
+        <input id="setupPassword" type="password" placeholder="至少6位字符" />
+      </label>
+      <label>
+        确认密码
+        <input id="setupPassword2" type="password" placeholder="再次输入密码" />
+      </label>
+      <div id="setupError" class="error" style="display:none"></div>
+      <button class="btn primary" onclick="submitSetupPassword()">设置密码并登录</button>
+    </div>
+  </div>
+
   <div class="bg-blur"></div>
 
   <header class="topbar glass">

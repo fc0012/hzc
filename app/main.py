@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -10,10 +10,15 @@ import asyncio
 import uuid
 import time
 import secrets
+import os
+from pathlib import Path
 
 from app.config import settings
 from app.service import monitor
 from app.telegram_control import TelegramControl
+
+# 密码设置标记文件路径
+PASSWORD_SET_FLAG = Path(settings.runtime_config_path).parent / ".password_set"
 
 app = FastAPI(title="Hetzner Traffic Guard")
 app.add_middleware(GZipMiddleware, minimum_size=1024)
@@ -22,11 +27,23 @@ app.mount('/static', StaticFiles(directory='app/static'), name='static')
 # HTTP Basic 认证
 security = HTTPBasic()
 
+def is_password_set() -> bool:
+    """检查是否已设置密码"""
+    # 如果环境变量中设置了密码,认为已设置
+    if settings.panel_password:
+        return True
+    # 否则检查标记文件
+    return PASSWORD_SET_FLAG.exists()
+
 def verify_auth(credentials: HTTPBasicCredentials = Depends(security)):
     """验证面板访问权限"""
-    # 如果未设置密码,则不需要认证
-    if not settings.panel_password:
-        return None
+    # 如果未设置密码,返回特殊标记让前端引导设置
+    if not is_password_set():
+        raise HTTPException(
+            status_code=428,  # Precondition Required
+            detail="需要先设置密码",
+            headers={"X-Need-Setup": "true"},
+        )
     
     correct_username = secrets.compare_digest(credentials.username, settings.panel_username)
     correct_password = secrets.compare_digest(credentials.password, settings.panel_password)
@@ -106,6 +123,11 @@ class QBNodeReq(BaseModel):
     password: str
 
 
+class SetupPasswordReq(BaseModel):
+    username: str
+    password: str
+
+
 class RebuildReq(BaseModel):
     image_id: int | str
 
@@ -137,6 +159,57 @@ async def startup_event():
     if tg_control.enabled:
         import asyncio
         asyncio.create_task(tg_control.run())
+
+
+@app.get('/api/need_setup')
+async def check_need_setup():
+    """检查是否需要设置密码"""
+    return {"need_setup": not is_password_set()}
+
+
+@app.post('/api/setup_password')
+async def setup_password(req: SetupPasswordReq):
+    """首次设置密码"""
+    # 如果已经设置过密码,不允许再次设置
+    if is_password_set():
+        raise HTTPException(status_code=400, detail="密码已设置,无法重复设置")
+    
+    # 验证密码强度
+    if len(req.password) < 6:
+        raise HTTPException(status_code=400, detail="密码长度至少6位")
+    
+    # 更新 .env 文件
+    env_path = Path("/opt/hzc/.env")
+    if not env_path.exists():
+        env_path = Path(".env")
+    
+    if env_path.exists():
+        lines = env_path.read_text(encoding='utf-8').splitlines()
+        updated = {"PANEL_USERNAME": False, "PANEL_PASSWORD": False}
+        new_lines = []
+        
+        for line in lines:
+            if line.startswith("PANEL_USERNAME="):
+                new_lines.append(f"PANEL_USERNAME={req.username}")
+                updated["PANEL_USERNAME"] = True
+            elif line.startswith("PANEL_PASSWORD="):
+                new_lines.append(f"PANEL_PASSWORD={req.password}")
+                updated["PANEL_PASSWORD"] = True
+            else:
+                new_lines.append(line)
+        
+        if not updated["PANEL_USERNAME"]:
+            new_lines.append(f"PANEL_USERNAME={req.username}")
+        if not updated["PANEL_PASSWORD"]:
+            new_lines.append(f"PANEL_PASSWORD={req.password}")
+        
+        env_path.write_text("\n".join(new_lines) + "\n", encoding='utf-8')
+    
+    # 创建标记文件
+    PASSWORD_SET_FLAG.parent.mkdir(parents=True, exist_ok=True)
+    PASSWORD_SET_FLAG.touch()
+    
+    return {"ok": True, "message": "密码设置成功,请刷新页面重新登录"}
 
 
 @app.get('/', response_class=HTMLResponse)

@@ -795,10 +795,79 @@ async function deleteQBNode(){
   closeQBModal(); loadAll(false)
 }
 
+// 首次设置密码相关函数
+async function checkNeedSetup() {
+  try {
+    const r = await fetch('/api/need_setup')
+    const d = await r.json()
+    if (d.need_setup) {
+      document.getElementById('setupOverlay').style.display = 'flex'
+      return true
+    }
+    return false
+  } catch(e) {
+    console.error('检查设置状态失败:', e)
+    return false
+  }
+}
+
+async function submitSetupPassword() {
+  const username = document.getElementById('setupUsername').value.trim()
+  const password = document.getElementById('setupPassword').value
+  const password2 = document.getElementById('setupPassword2').value
+  const errorDiv = document.getElementById('setupError')
+  
+  if (!username) {
+    errorDiv.textContent = '请输入用户名'
+    errorDiv.style.display = 'block'
+    return
+  }
+  
+  if (password.length < 6) {
+    errorDiv.textContent = '密码长度至少6位'
+    errorDiv.style.display = 'block'
+    return
+  }
+  
+  if (password !== password2) {
+    errorDiv.textContent = '两次输入的密码不一致'
+    errorDiv.style.display = 'block'
+    return
+  }
+  
+  try {
+    const r = await fetch('/api/setup_password', {
+      method: 'POST',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({username, password})
+    })
+    const d = await r.json()
+    
+    if (!r.ok) {
+      errorDiv.textContent = d.detail || '设置失败'
+      errorDiv.style.display = 'block'
+      return
+    }
+    
+    alert('密码设置成功!页面将刷新,请使用新密码登录')
+    window.location.reload()
+  } catch(e) {
+    errorDiv.textContent = '请求失败: ' + e.message
+    errorDiv.style.display = 'block'
+  }
+}
+
 if(byId('kw')) byId('kw').addEventListener('input',()=>loadData(false))
 initTheme();
-bootstrapFromCache()
-loadAll(false)
+
+// 启动时检查是否需要设置密码
+checkNeedSetup().then(needSetup => {
+  if (!needSetup) {
+    bootstrapFromCache()
+    loadAll(false)
+  }
+})
+
 // layered refresh: qB high-frequency, others lower frequency
 setInterval(()=>{ if(!document.hidden) loadQBRealtime() }, 3000)
 setInterval(()=>{ if(!document.hidden) loadData(false) }, 15000)
