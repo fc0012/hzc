@@ -494,6 +494,52 @@ function copySSHCommand(ip){
   })
 }
 
+// 任务进度相关函数
+function openTasksModal(){
+  byId('tasksModal').classList.remove('hidden')
+  refreshTasks()
+}
+
+function closeTasksModal(){
+  byId('tasksModal').classList.add('hidden')
+}
+
+async function refreshTasks(){
+  const list = byId('tasksList')
+  list.innerHTML = '<p style="color:var(--text-muted)">加载中...</p>'
+  
+  try {
+    const r = await fetch('/api/tasks')
+    const d = await r.json()
+    if(!r.ok || !d?.ok){
+      list.innerHTML = `<p style="color:#f44">加载失败: ${d?.error||'未知错误'}</p>`
+      return
+    }
+    
+    const tasks = d.tasks || []
+    if(tasks.length === 0){
+      list.innerHTML = '<p style="color:var(--text-muted)">暂无后台任务</p>'
+      return
+    }
+    
+    list.innerHTML = tasks.map(t => `
+      <div style="border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span style="font-weight:bold">${t.type || '任务'}</span>
+          <span style="color:${t.status==='completed'?'#4caf50':t.status==='failed'?'#f44336':'#ff9800'}">${t.status || 'running'}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">ID: ${t.id || 'N/A'}</div>
+        ${t.server_id ? `<div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">服务器: #${t.server_id}</div>` : ''}
+        ${t.message ? `<div style="font-size:13px;margin-top:6px">${t.message}</div>` : ''}
+        ${t.progress ? `<div style="background:var(--border);height:4px;border-radius:2px;margin-top:8px"><div style="background:#4caf50;height:100%;width:${t.progress}%;border-radius:2px"></div></div>` : ''}
+        <div style="font-size:11px;color:var(--text-muted);margin-top:6px">${t.created_at || ''}</div>
+      </div>
+    `).join('')
+  } catch(e) {
+    list.innerHTML = `<p style="color:#f44">加载失败: ${e.message}</p>`
+  }
+}
+
 function openRebuildModal(serverId){
   byId('rebuildModal').classList.remove('hidden')
   byId('rebuild_server_id').value=serverId

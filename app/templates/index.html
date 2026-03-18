@@ -99,6 +99,7 @@
       <button class="btn" onclick="openTGModal()">TG配置</button>
       <button class="btn btn-danger" onclick="triggerUpgrade()">🚀 一键升级</button>
       <button class="btn" onclick="showInstallCommand()">📋 安装命令</button>
+      <button class="btn" onclick="openTasksModal()">📊 任务进度</button>
       <button class="btn ghost" id="themeBtn" onclick="toggleTheme()">☀️ 浅色</button>
     </div>
   </header>
@@ -262,6 +263,20 @@
         <button class="btn primary" onclick="saveAutoPolicy()">保存策略</button>
         <button class="btn" onclick="deleteAutoPolicy()">删除策略</button>
         <button class="btn" onclick="closeAutoPolicyModal()">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 任务进度模态框 -->
+  <div id="tasksModal" class="modal hidden">
+    <div class="modal-card glass">
+      <h3>📊 后台任务进度</h3>
+      <div id="tasksList" style="max-height:400px;overflow-y:auto">
+        <p style="color:var(--text-muted)">加载中...</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="refreshTasks()">刷新</button>
+        <button class="btn" onclick="closeTasksModal()">关闭</button>
       </div>
     </div>
   </div>

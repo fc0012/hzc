@@ -92,7 +92,7 @@ JOBS: dict[str, dict] = {}
 
 def _queue_job(kind: str, coro):
     job_id = uuid.uuid4().hex[:12]
-    JOBS[job_id] = {"id": job_id, "kind": kind, "status": "queued"}
+    JOBS[job_id] = {"id": job_id, "kind": kind, "status": "queued", "created_at": datetime.now().isoformat()}
 
     async def _runner():
         JOBS[job_id]["status"] = "running"
@@ -109,6 +109,32 @@ def _queue_job(kind: str, coro):
 
     asyncio.create_task(_runner())
     return job_id
+
+
+@app.get('/api/tasks')
+async def api_tasks(username: str = Depends(verify_auth)):
+    """获取后台任务列表"""
+    tasks = []
+    for job_id, job in JOBS.items():
+        task = {
+            "id": job_id,
+            "type": job.get("kind", "unknown"),
+            "status": job.get("status", "unknown"),
+            "created_at": job.get("created_at", ""),
+            "message": ""
+        }
+        if job.get("result"):
+            result = job["result"]
+            if isinstance(result, dict):
+                task["message"] = result.get("message", "")
+                task["server_id"] = result.get("server_id")
+        if job.get("error"):
+            task["message"] = f"错误: {job['error']}"
+        tasks.append(task)
+    
+    # 按创建时间倒序排列
+    tasks.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    return {"ok": True, "tasks": tasks[:50]}  # 只返回最近50个任务
 
 
 class CreateServerReq(BaseModel):
