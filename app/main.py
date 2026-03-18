@@ -1,13 +1,15 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from pydantic import BaseModel
 import asyncio
 import uuid
 import time
+import secrets
 
 from app.config import settings
 from app.service import monitor
@@ -16,6 +18,26 @@ from app.telegram_control import TelegramControl
 app = FastAPI(title="Hetzner Traffic Guard")
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 app.mount('/static', StaticFiles(directory='app/static'), name='static')
+
+# HTTP Basic 认证
+security = HTTPBasic()
+
+def verify_auth(credentials: HTTPBasicCredentials = Depends(security)):
+    """验证面板访问权限"""
+    # 如果未设置密码,则不需要认证
+    if not settings.panel_password:
+        return None
+    
+    correct_username = secrets.compare_digest(credentials.username, settings.panel_username)
+    correct_password = secrets.compare_digest(credentials.password, settings.panel_password)
+    
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code=401,
+            detail="用户名或密码错误",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
 
 
 @app.middleware("http")
@@ -118,7 +140,7 @@ async def startup_event():
 
 
 @app.get('/', response_class=HTMLResponse)
-async def home(request: Request):
+async def home(request: Request, username: str = Depends(verify_auth)):
     return templates.TemplateResponse('index.html', {
         'request': request,
         'safe_mode': settings.safe_mode,
@@ -127,83 +149,83 @@ async def home(request: Request):
 
 
 @app.get('/api/servers')
-async def servers():
+async def servers(username: str = Depends(verify_auth)):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
     return await monitor.collect()
 
 
 @app.get('/api/ping')
-async def ping():
+async def ping(username: str = Depends(verify_auth)):
     return {"ok": True, "app_version": settings.app_version, "app_commit": settings.app_commit}
 
 
 @app.get('/api/meta')
-async def meta():
+async def meta(username: str = Depends(verify_auth)):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
     return await monitor.meta()
 
 
 @app.get('/api/daily_stats')
-async def daily_stats(days: int = 7):
+async def daily_stats(days: int = 7, username: str = Depends(verify_auth)):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
     return await monitor.daily_stats(days=days)
 
 
 @app.get('/api/qb_status')
-async def qb_status():
+async def qb_status(username: str = Depends(verify_auth)):
     return await monitor.qb_status()
 
 
 @app.get('/api/qb_nodes')
-async def qb_nodes():
+async def qb_nodes(username: str = Depends(verify_auth)):
     return monitor.qb_nodes()
 
 
 @app.get('/api/qb_realtime')
-async def qb_realtime():
+async def qb_realtime(username: str = Depends(verify_auth)):
     return await monitor.qb_realtime()
 
 
 @app.post('/api/qb_node')
-async def qb_node_set(req: QBNodeReq):
+async def qb_node_set(req: QBNodeReq, username: str = Depends(verify_auth)):
     return await monitor.qb_node_set(req.server_id, req.url, req.username, req.password)
 
 
 @app.delete('/api/qb_node/{server_id}')
-async def qb_node_delete(server_id: int):
+async def qb_node_delete(server_id: int, username: str = Depends(verify_auth)):
     return monitor.qb_node_delete(server_id)
 
 
 @app.get('/api/auto_policies')
-async def auto_policies():
+async def auto_policies(username: str = Depends(verify_auth)):
     return monitor.auto_policies()
 
 
 @app.post('/api/auto_policy')
-async def auto_policy_set(req: AutoPolicyReq):
+async def auto_policy_set(req: AutoPolicyReq, username: str = Depends(verify_auth)):
     return monitor.auto_policy_set(req.server_id, req.enabled, req.threshold, req.image_id)
 
 
 @app.delete('/api/auto_policy/{server_id}')
-async def auto_policy_delete(server_id: int):
+async def auto_policy_delete(server_id: int, username: str = Depends(verify_auth)):
     return monitor.auto_policy_delete(server_id)
 
 
 @app.get('/api/config/telegram')
-async def telegram_config_get():
+async def telegram_config_get(username: str = Depends(verify_auth)):
     return tg_control.get_telegram_config()
 
 
 @app.put('/api/config/telegram')
-async def telegram_config_set(req: TelegramConfigReq):
+async def telegram_config_set(req: TelegramConfigReq, username: str = Depends(verify_auth)):
     return tg_control.set_telegram_config(req.telegram_bot_token, req.telegram_chat_id)
 
 
 @app.post('/api/service/restart')
-async def service_restart():
+async def service_restart(username: str = Depends(verify_auth)):
     cmd = "nohup bash -lc 'cd /opt/hzc && (docker-compose restart hetzner-traffic-guard || docker compose restart hetzner-traffic-guard)' >/tmp/hzc-restart.log 2>&1 &"
     p = await asyncio.create_subprocess_shell(cmd)
     await p.communicate()
@@ -211,7 +233,7 @@ async def service_restart():
 
 
 @app.post('/api/upgrade')
-async def api_upgrade():
+async def api_upgrade(username: str = Depends(verify_auth)):
     now = int(time.time())
     rc = monitor.runtime.get()
     last_ts = int(rc.get("last_upgrade_trigger_ts") or 0)
@@ -269,14 +291,14 @@ async def api_upgrade():
 
 
 @app.post('/api/rotate/{server_id}')
-async def rotate(server_id: int):
+async def rotate(server_id: int, username: str = Depends(verify_auth)):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
     return await monitor.rotate_server(server_id)
 
 
 @app.post('/api/rebuild/{server_id}')
-async def rebuild(server_id: int, req: RebuildReq):
+async def rebuild(server_id: int, req: RebuildReq, username: str = Depends(verify_auth)):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
     job_id = _queue_job("rebuild", monitor.rebuild_with_snapshot_manual(server_id, req.image_id))
@@ -284,7 +306,7 @@ async def rebuild(server_id: int, req: RebuildReq):
 
 
 @app.post('/api/rebuild_full/{server_id}')
-async def rebuild_full(server_id: int, req: RebuildReq):
+async def rebuild_full(server_id: int, req: RebuildReq, username: str = Depends(verify_auth)):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
     job_id = _queue_job("rebuild_full", monitor.rebuild_full_manual(server_id, req.image_id))
@@ -292,24 +314,24 @@ async def rebuild_full(server_id: int, req: RebuildReq):
 
 
 @app.get('/api/safe_mode')
-async def safe_mode_get():
+async def safe_mode_get(username: str = Depends(verify_auth)):
     return {"safe_mode": monitor.get_safe_mode()}
 
 
 @app.put('/api/safe_mode')
-async def safe_mode_set(enabled: bool):
+async def safe_mode_set(enabled: bool, username: str = Depends(verify_auth)):
     return monitor.set_safe_mode(enabled)
 
 
 @app.get('/api/snapshot_estimate/{server_id}')
-async def snapshot_estimate(server_id: int):
+async def snapshot_estimate(server_id: int, username: str = Depends(verify_auth)):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
     return await monitor.estimate_snapshot(server_id)
 
 
 @app.post('/api/snapshot/{server_id}')
-async def snapshot(server_id: int, req: SnapshotReq | None = None):
+async def snapshot(server_id: int, req: SnapshotReq | None = None, username: str = Depends(verify_auth)):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
     desc = req.description if req else None
@@ -317,7 +339,7 @@ async def snapshot(server_id: int, req: SnapshotReq | None = None):
 
 
 @app.post('/api/create_server')
-async def create_server(req: CreateServerReq):
+async def create_server(req: CreateServerReq, username: str = Depends(verify_auth)):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
     job_id = _queue_job(
@@ -335,35 +357,35 @@ async def create_server(req: CreateServerReq):
 
 
 @app.delete('/api/snapshot/{image_id}')
-async def delete_snapshot(image_id: int):
+async def delete_snapshot(image_id: int, username: str = Depends(verify_auth)):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
     return await monitor.delete_snapshot_manual(image_id)
 
 
 @app.patch('/api/snapshot/{image_id}')
-async def rename_snapshot(image_id: int, req: RenameSnapshotReq):
+async def rename_snapshot(image_id: int, req: RenameSnapshotReq, username: str = Depends(verify_auth)):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
     return await monitor.rename_snapshot_manual(image_id, req.description)
 
 
 @app.post('/api/reset_password/{server_id}')
-async def reset_password(server_id: int):
+async def reset_password(server_id: int, username: str = Depends(verify_auth)):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
     return await monitor.reset_password_and_notify(server_id)
 
 
 @app.patch('/api/server/{server_id}/name')
-async def rename_server(server_id: int, req: RenameServerReq):
+async def rename_server(server_id: int, req: RenameServerReq, username: str = Depends(verify_auth)):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
     return await monitor.rename_server_manual(server_id, req.name)
 
 
 @app.post('/api/server/{server_id}/reboot')
-async def reboot_server(server_id: int):
+async def reboot_server(server_id: int, username: str = Depends(verify_auth)):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
     res = await monitor.op_server('reboot', server_id)
@@ -371,14 +393,14 @@ async def reboot_server(server_id: int):
 
 
 @app.post('/api/server/{server_id}/hard_reboot')
-async def hard_reboot_server(server_id: int):
+async def hard_reboot_server(server_id: int, username: str = Depends(verify_auth)):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
     return await monitor.hard_reboot(server_id)
 
 
 @app.post('/api/server/{server_id}/delete')
-async def delete_server(server_id: int, req: DeleteServerReq):
+async def delete_server(server_id: int, req: DeleteServerReq, username: str = Depends(verify_auth)):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
     return await monitor.delete_server_manual(
@@ -391,7 +413,7 @@ async def delete_server(server_id: int, req: DeleteServerReq):
 
 
 @app.get('/api/action/{action_id}')
-async def action_status(action_id: int):
+async def action_status(action_id: int, username: str = Depends(verify_auth)):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
     return await monitor.get_action_status(action_id)

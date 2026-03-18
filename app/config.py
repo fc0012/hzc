@@ -34,6 +34,8 @@ class Settings(BaseModel):
     app_commit: str = os.getenv("APP_COMMIT", detect_git_commit_short())
     runtime_config_path: str = os.getenv("RUNTIME_CONFIG_PATH", "/app/state/runtime_config.json")
     auto_policy_path: str = os.getenv("AUTO_POLICY_PATH", "/app/state/auto_policies.json")
+    panel_username: str = os.getenv("PANEL_USERNAME", "admin")
+    panel_password: str = os.getenv("PANEL_PASSWORD", "")
 
 
 settings = Settings()
