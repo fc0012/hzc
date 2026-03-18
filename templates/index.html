@@ -93,7 +93,7 @@
                     <div class="server-info">
                         <p><strong>IP:</strong> ${s.public_ip || '-'}</p>
                         <p><strong>类型:</strong> ${s.server_type || '-'}</p>
-                        <p><strong>位置:</strong> ${s.location || '-'}</p>
+                        <p><strong>位置:</strong> ${s.location_cn || s.location || '-'}</p>
                     </div>
                     <div class="traffic-bar">
                         <div class="traffic-fill" style="width: ${Math.min(s.usage_percent, 100)}%"></div>
@@ -103,6 +103,7 @@
                         <button onclick="serverAction(${s.id}, 'start')" class="btn btn-success" ${s.status === 'running' ? 'disabled' : ''}>开机</button>
                         <button onclick="serverAction(${s.id}, 'stop')" class="btn btn-warning" ${s.status !== 'running' ? 'disabled' : ''}>关机</button>
                         <button onclick="serverAction(${s.id}, 'reboot')" class="btn btn-primary" ${s.status !== 'running' ? 'disabled' : ''}>重启</button>
+                        <button onclick="connectSSH('${s.public_ip}')" class="btn btn-ssh" ${s.status !== 'running' || !s.public_ip ? 'disabled' : ''}>SSH</button>
                         <button onclick="showProcesses(${s.id})" class="btn btn-secondary" ${s.status !== 'running' ? 'disabled' : ''}>进程</button>
                         <button onclick="createSnapshot(${s.id})" class="btn btn-info">快照</button>
                         <button onclick="confirmDelete(${s.id})" class="btn btn-danger">删除</button>
@@ -124,6 +125,22 @@
             } catch (e) {
                 alert(`${actionNames[action]}失败`);
             }
+        }
+
+        // SSH连接
+        function connectSSH(ip) {
+            if (!ip) {
+                alert('IP地址不可用');
+                return;
+            }
+            // 复制SSH连接命令到剪贴板
+            const sshCommand = `ssh root@${ip}`;
+            navigator.clipboard.writeText(sshCommand).then(() => {
+                alert(`SSH连接命令已复制到剪贴板:\n${sshCommand}\n\n请在终端中粘贴并执行`);
+            }).catch(() => {
+                // 如果剪贴板API不可用，显示命令让用户手动复制
+                prompt('请复制以下SSH连接命令:', sshCommand);
+            });
         }
 
         // 创建快照

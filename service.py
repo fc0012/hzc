@@ -13,6 +13,15 @@ from config import settings
 BYTES_IN_TB = 1024**4
 DATA_DIR = "data"
 
+# 机房位置中文名称映射
+LOCATION_NAMES = {
+    "fsn1": "德国-纽伦堡",
+    "nbg1": "德国-纽伦堡",
+    "hel1": "芬兰-赫尔辛基",
+    "ash": "美国-阿什本",
+    "sin": "新加坡",
+}
+
 
 class RebuildPolicy(BaseModel):
     """自动重建策略"""
@@ -67,6 +76,10 @@ class MonitorService:
             ipv4 = public_net.get("ipv4", {})
             public_ip = ipv4.get("ip", "")
 
+            # 获取机房位置
+            location = s.get("datacenter", {}).get("location", {}).get("name", "")
+            location_cn = LOCATION_NAMES.get(location, location)
+
             result.append({
                 "id": s["id"],
                 "name": s["name"],
@@ -76,7 +89,8 @@ class MonitorService:
                 "included_traffic_tb": round(included_tb, 2),
                 "usage_percent": round(usage_percent, 1),
                 "server_type": s.get("server_type", {}).get("name", ""),
-                "location": s.get("datacenter", {}).get("location", {}).get("name", ""),
+                "location": location,
+                "location_cn": location_cn,
             })
 
         return result
