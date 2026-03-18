@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hetzner PT流量管理器</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🖥️ Hetzner PT流量管理器</h1>
+            <div class="header-right">
+                <span id="safe-mode-status"></span>
+                <button onclick="logout()" class="btn btn-secondary">退出</button>
+            </div>
+        </header>
+
+        <main>
+            <section class="servers">
+                <h2>服务器列表</h2>
+                <div id="servers-list" class="server-grid">加载中...</div>
+            </section>
+
+            <section class="snapshots">
+                <h2>快照列表</h2>
+                <div id="snapshots-list">加载中...</div>
+            </section>
+
+            <section class="policies">
+                <h2>自动重建策略</h2>
+                <div id="policies-list">加载中...</div>
+            </section>
+        </main>
+    </div>
+
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <h3 id="modal-title">确认</h3>
+            <p id="modal-message"></p>
+            <div class="modal-buttons">
+                <button onclick="closeModal()" class="btn btn-secondary">取消</button>
+                <button id="modal-confirm" class="btn btn-danger">确认</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = {
+            servers: '/api/servers',
+            snapshots: '/api/snapshots',
+            policies: '/api/policies',
+            safeMode: '/api/safe_mode'
+        };
+
+        let currentServer = null;
+        let currentAction = null;
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            loadServers();
+            loadSnapshots();
+            loadPolicies();
+            loadSafeMode();
+            // 每30秒刷新一次
+            setInterval(loadServers, 30000);
+        });
+
+        // 加载服务器列表
+        async function loadServers() {
+            try {
+                const resp = await fetch(API.servers);
+                const data = await resp.json();
+                renderServers(data.servers);
+            } catch (e) {
+                document.getElementById('servers-list').innerHTML = '<p class="error">加载失败</p>';
+            }
+        }
+
+        // 渲染服务器列表
+        function renderServers(servers) {
+            if (!servers || servers.length === 0) {
+                document.getElementById('servers-list').innerHTML = '<p>暂无服务器</p>';
+                return;
+            }
+
+            const html = servers.map(s => `
+                <div class="server-card ${s.status}">
+                    <div class="server-header">
+                        <h3>${s.name}</h3>
+                        <span class="status ${s.status}">${s.status}</span>
+                    </div>
+                    <div class="server-info">
+                        <p><strong>IP:</strong> ${s.public_ip || '-'}</p>
+                        <p><strong>类型:</strong> ${s.server_type || '-'}</p>
+                        <p><strong>位置:</strong> ${s.location || '-'}</p>
+                    </div>
+                    <div class="traffic-bar">
+                        <div class="traffic-fill" style="width: ${Math.min(s.usage_percent, 100)}%"></div>
+                        <span class="traffic-text">${s.usage_percent}% (${s.used_traffic_tb}/${s.included_traffic_tb} TB)</span>
+                    </div>
+                    <div class="server-actions">
+                        <button onclick="serverAction(${s.id}, 'start')" class="btn btn-success" ${s.status === 'running' ? 'disabled' : ''}>开机</button>
+                        <button onclick="serverAction(${s.id}, 'stop')" class="btn btn-warning" ${s.status !== 'running' ? 'disabled' : ''}>关机</button>
+                        <button onclick="serverAction(${s.id}, 'reboot')" class="btn btn-primary" ${s.status !== 'running' ? 'disabled' : ''}>重启</button>
+                        <button onclick="showProcesses(${s.id})" class="btn btn-secondary" ${s.status !== 'running' ? 'disabled' : ''}>进程</button>
+                        <button onclick="createSnapshot(${s.id})" class="btn btn-info">快照</button>
+                        <button onclick="confirmDelete(${s.id})" class="btn btn-danger">删除</button>
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('servers-list').innerHTML = html;
+        }
+
+        // 服务器操作
+        async function serverAction(id, action) {
+            const actionNames = { start: '开机', stop: '关机', reboot: '重启' };
+            try {
+                const resp = await fetch(`/api/server/${id}/${action}`, { method: 'POST' });
+                const data = await resp.json();
+                alert(data.message || `${actionNames[action]}成功`);
+                loadServers();
+            } catch (e) {
+                alert(`${actionNames[action]}失败`);
+            }
+        }
+
+        // 创建快照
+        async function createSnapshot(id) {
+            try {
+                const resp = await fetch(`/api/server/${id}/snapshot`, { method: 'POST' });
+                const data = await resp.json();
+                alert(data.message || '快照创建中...');
+                loadSnapshots();
+            } catch (e) {
+                alert('创建快照失败');
+            }
+        }
+
+        // 显示进程
+        async function showProcesses(id) {
+            try {
+                const resp = await fetch(`/api/server/${id}/ps`);
+                const data = await resp.json();
+                const processes = data.processes || [];
+                if (processes.length === 0) {
+                    alert('无监控进程或无法获取');
+                    return;
+                }
+                const msg = processes.map(p =>
+                    `${p.name}: ${p.is_running ? '✅ 运行中 (PID: ' + p.pid + ')' : '❌ 未运行'}`
+                ).join('\n');
+                alert(msg);
+            } catch (e) {
+                alert('获取进程失败');
+            }
+        }
+
+        // 确认删除
+        function confirmDelete(id) {
+            currentServer = id;
+            currentAction = 'delete';
+            showModal('确认删除', '确定要删除此服务器吗？此操作不可恢复！', doDelete);
+        }
+
+        // 执行删除
+        async function doDelete() {
+            try {
+                const resp = await fetch(`/api/server/${currentServer}/delete`, { method: 'POST' });
+                const data = await resp.json();
+                alert(data.message || '删除成功');
+                loadServers();
+            } catch (e) {
+                alert('删除失败');
+            }
+            closeModal();
+        }
+
+        // 加载快照列表
+        async function loadSnapshots() {
+            try {
+                const resp = await fetch(API.snapshots);
+                const data = await resp.json();
+                renderSnapshots(data.snapshots);
+            } catch (e) {
+                document.getElementById('snapshots-list').innerHTML = '<p class="error">加载失败</p>';
+            }
+        }
+
+        // 渲染快照列表
+        function renderSnapshots(snapshots) {
+            if (!snapshots || snapshots.length === 0) {
+                document.getElementById('snapshots-list').innerHTML = '<p>暂无快照</p>';
+                return;
+            }
+
+            const html = `
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>名称</th>
+                            <th>大小</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${snapshots.map(s => `
+                            <tr>
+                                <td>${s.id}</td>
+                                <td>${s.name || '-'}</td>
+                                <td>${s.size_gb} GB</td>
+                                <td>${s.created_at || '-'}</td>
+                                <td>
+                                    <button onclick="deleteSnapshot(${s.id})" class="btn btn-danger btn-sm">删除</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+
+            document.getElementById('snapshots-list').innerHTML = html;
+        }
+
+        // 删除快照
+        async function deleteSnapshot(id) {
+            if (!confirm('确定要删除此快照吗？')) return;
+            try {
+                const resp = await fetch(`/api/snapshot/${id}`, { method: 'DELETE' });
+                const data = await resp.json();
+                alert(data.message || '删除成功');
+                loadSnapshots();
+            } catch (e) {
+                alert('删除失败');
+            }
+        }
+
+        // 加载策略列表
+        async function loadPolicies() {
+            try {
+                const resp = await fetch(API.policies);
+                const data = await resp.json();
+                renderPolicies(data.policies);
+            } catch (e) {
+                document.getElementById('policies-list').innerHTML = '<p class="error">加载失败</p>';
+            }
+        }
+
+        // 渲染策略列表
+        function renderPolicies(policies) {
+            if (!policies || policies.length === 0) {
+                document.getElementById('policies-list').innerHTML = '<p>暂无策略配置</p>';
+                return;
+            }
+
+            const html = `
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>服务器ID</th>
+                            <th>启用</th>
+                            <th>阈值</th>
+                            <th>镜像ID</th>
+                            <th>保留IP</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${policies.map(p => `
+                            <tr>
+                                <td>${p.server_id}</td>
+                                <td>${p.enabled ? '✅' : '❌'}</td>
+                                <td>${p.threshold * 100}%</td>
+                                <td>${p.image_id || '-'}</td>
+                                <td>${p.keep_ip ? '✅' : '❌'}</td>
+                                <td>
+                                    <button onclick="editPolicy(${p.server_id})" class="btn btn-primary btn-sm">编辑</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+
+            document.getElementById('policies-list').innerHTML = html;
+        }
+
+        // 加载安全模式状态
+        async function loadSafeMode() {
+            try {
+                const resp = await fetch(API.safeMode);
+                const data = await resp.json();
+                updateSafeModeStatus(data.safe_mode);
+            } catch (e) {}
+        }
+
+        // 更新安全模式状态显示
+        function updateSafeModeStatus(enabled) {
+            const el = document.getElementById('safe-mode-status');
+            el.innerHTML = `
+                <span class="safe-mode ${enabled ? 'on' : 'off'}">
+                    安全模式: ${enabled ? '开启' : '关闭'}
+                </span>
+                <button onclick="toggleSafeMode()" class="btn btn-sm">${enabled ? '关闭' : '开启'}</button>
+            `;
+        }
+
+        // 切换安全模式
+        async function toggleSafeMode() {
+            try {
+                const resp = await fetch(API.safeMode, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await resp.json();
+                updateSafeModeStatus(data.safe_mode);
+            } catch (e) {}
+        }
+
+        // 显示模态框
+        function showModal(title, message, onConfirm) {
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-message').textContent = message;
+            document.getElementById('modal-confirm').onclick = onConfirm;
+            document.getElementById('modal').style.display = 'flex';
+        }
+
+        // 关闭模态框
+        function closeModal() {
+            document.getElementById('modal').style.display = 'none';
+            currentServer = null;
+            currentAction = null;
+        }
+
+        // 退出登录
+        async function logout() {
+            try {
+                await fetch('/logout', { method: 'POST' });
+                window.location.href = '/login';
+            } catch (e) {
+                window.location.href = '/login';
+            }
+        }
+    </script>
+</body>
+</html>

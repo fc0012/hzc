@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  hetzner-pt:
+    build: .
+    container_name: hetzner-pt
+    ports:
+      - "8080:8080"
+    environment:
+      - HETZNER_TOKEN=${HETZNER_TOKEN}
+      - TRAFFIC_LIMIT_TB=${TRAFFIC_LIMIT_TB:-20}
+      - ROTATE_THRESHOLD=${ROTATE_THRESHOLD:-0.98}
+      - CHECK_INTERVAL_MINUTES=${CHECK_INTERVAL_MINUTES:-5}
+      - SAFE_MODE=${SAFE_MODE:-true}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - SSH_USER=${SSH_USER:-root}
+      - SSH_PORT=${SSH_PORT:-22}
+      - WEB_USERNAME=${WEB_USERNAME:-admin}
+      - WEB_PASSWORD=${WEB_PASSWORD}
+      - SECRET_KEY=${SECRET_KEY}
+      - MONITOR_PROCESSES=${MONITOR_PROCESSES:-}
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
