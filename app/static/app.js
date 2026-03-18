@@ -608,17 +608,15 @@ async function triggerUpgrade(){
   alert('升级已在后台执行。\n可在 TG 里查看【升级日志】。')
 }
 
-async function triggerUninstall(){
-  if(!confirm('⚠️ 警告：卸载操作将删除所有数据！\n\n确认要卸载 Hetzner Traffic Guard 吗？\n此操作不可恢复！')) return
-  if(!confirm('⚠️ 再次确认：您真的要卸载吗？\n\n这将删除所有配置、数据和容器。')) return
-  const r=await fetch('/api/uninstall',{method:'POST'})
-  const d=await r.json()
-  if(!r.ok||!d?.ok){
-    alert(d?.detail||d?.error||'卸载触发失败')
-    return
-  }
-  toast('卸载任务已触发')
-  alert('卸载已在后台执行。\n容器和数据将被清理。')
+function showInstallCommand(){
+  const installCmd = 'bash <(curl -fsSL https://raw.githubusercontent.com/fc0012/hzc/main/scripts/bootstrap.sh)'
+  // 复制到剪贴板
+  navigator.clipboard.writeText(installCmd).then(() => {
+    alert(`✅ 安装命令已复制到剪贴板！\n\n请在终端中粘贴并执行：\n\n${installCmd}\n\n该脚本将自动安装 Hetzner Traffic Guard。`)
+  }).catch(() => {
+    // 如果剪贴板API不可用，显示命令让用户手动复制
+    prompt('请复制以下安装命令并在终端中执行：', installCmd)
+  })
 }
 
 async function saveTGConfig(restartAfter=false){

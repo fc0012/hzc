@@ -381,40 +381,6 @@ async def api_upgrade(username: str = Depends(verify_auth)):
     return {"ok": True, "queued": True, "task_id": cid or "n/a", "message": "升级任务已触发"}
 
 
-@app.post('/api/uninstall')
-async def api_uninstall(username: str = Depends(verify_auth)):
-    """卸载 Hetzner Traffic Guard"""
-    uninstall_cmd = (
-        "set -e; "
-        "ROOT=''; for d in /opt/hzc /app .; do if [ -f \"$d/docker-compose.yml\" ]; then ROOT=\"$d\"; break; fi; done; "
-        "if [ -z \"$ROOT\" ]; then echo '__ROOT_NOT_FOUND__'; exit 15; fi; "
-        "cd \"$ROOT\"; "
-        "if command -v docker-compose >/dev/null 2>&1; then "
-        "  docker-compose down -v --remove-orphans 2>&1 || true; "
-        "elif docker compose version >/dev/null 2>&1; then "
-        "  docker compose down -v --remove-orphans 2>&1 || true; "
-        "fi; "
-        "rm -rf \"$ROOT/data\" \"$ROOT/state\" 2>&1 || true; "
-        "echo 'Uninstall completed'"
-    )
-
-    p = await asyncio.create_subprocess_exec(
-        "bash", "-lc", uninstall_cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    out, err = await p.communicate()
-    so = (out.decode("utf-8", errors="ignore") if out else "").strip()
-    se = (err.decode("utf-8", errors="ignore") if err else "").strip()
-
-    if p.returncode != 0:
-        if "__ROOT_NOT_FOUND__" in so:
-            return {"ok": False, "error": "未找到项目目录（缺少 docker-compose.yml）"}
-        return {"ok": False, "error": (se or so or "unknown error")[-700:]}
-
-    return {"ok": True, "message": "卸载完成，容器和数据已清理"}
-
-
 @app.post('/api/rotate/{server_id}')
 async def rotate(server_id: int, username: str = Depends(verify_auth)):
     if not settings.hetzner_token:
