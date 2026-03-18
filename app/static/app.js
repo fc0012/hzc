@@ -608,6 +608,19 @@ async function triggerUpgrade(){
   alert('升级已在后台执行。\n可在 TG 里查看【升级日志】。')
 }
 
+async function triggerUninstall(){
+  if(!confirm('⚠️ 警告：卸载操作将删除所有数据！\n\n确认要卸载 Hetzner Traffic Guard 吗？\n此操作不可恢复！')) return
+  if(!confirm('⚠️ 再次确认：您真的要卸载吗？\n\n这将删除所有配置、数据和容器。')) return
+  const r=await fetch('/api/uninstall',{method:'POST'})
+  const d=await r.json()
+  if(!r.ok||!d?.ok){
+    alert(d?.detail||d?.error||'卸载触发失败')
+    return
+  }
+  toast('卸载任务已触发')
+  alert('卸载已在后台执行。\n容器和数据将被清理。')
+}
+
 async function saveTGConfig(restartAfter=false){
   const body={telegram_bot_token:byId('tg_token').value.trim(), telegram_chat_id:byId('tg_chat').value.trim()}
   if(!body.telegram_bot_token || !body.telegram_chat_id){ alert('请填写 Bot Token 和 Chat ID'); return }
