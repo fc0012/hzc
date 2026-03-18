@@ -7,6 +7,16 @@ let AUTO_POLICIES={}
 let __rowHtmlCache={}
 let __qbHtmlCache={}
 
+// 机房中文名称映射
+const LOCATION_CN = {
+  'fsn1': '德国-福尔克温克尔',
+  'nbg1': '德国-纽伦堡',
+  'hel1': '芬兰-赫尔辛基',
+  'ash': '美国-阿什本',
+  'sin': '新加坡',
+  'hil': '美国-希尔兹伯勒'
+}
+
 const CACHE_KEYS={
   servers:'hzc.cache.servers',
   meta:'hzc.cache.meta',
@@ -249,7 +259,7 @@ async function loadMeta(showToast=false){
   setCache(CACHE_KEYS.meta, META)
   setCache(CACHE_KEYS.ts, Date.now())
   if(byId('appVersion')) byId('appVersion').textContent = META.app_version || '--'
-  byId('c_location').innerHTML=META.locations.map(l=>`<option value="${l.name}">${l.name} (${l.city||''})</option>`).join('')
+  byId('c_location').innerHTML=META.locations.map(l=>`<option value="${l.name}">${l.name} (${LOCATION_CN[l.name] || l.city || ''})</option>`).join('')
   const fams=[...new Set(META.server_types.map(t=>typeFamily(t.name)).filter(Boolean))].sort()
   byId('f_family').innerHTML=['<option value="">全部系列</option>'].concat(fams.map(f=>`<option value="${f}">${f}</option>`)).join('')
   const snaps=(META.snapshots||[]).map(s=>`<option value="${s.id}">snapshot#${s.id} - ${s.name||''} (${s.size_gb||0}GB)</option>`)
@@ -267,7 +277,7 @@ async function loadMeta(showToast=false){
 function showTypePrice(){
   const v=byId('c_type').value,t=META.server_types.find(x=>x.name===v),loc=byId('c_location').value
   let txt='',est='',st=''
-  if(t){const p=t.prices?.find(x=>x.location===loc)||t.prices?.[0],state=stockState(t,loc);st=`库存状态：${state}`;if(p?.price_monthly?.gross){const pm=Number(p.price_monthly.gross||0).toFixed(2);txt=`约 €${pm} /月（${p.location}）`;est=`创建前费用预估：月费 €${pm}（不含超额流量）`}}
+  if(t){const p=t.prices?.find(x=>x.location===loc)||t.prices?.[0],state=stockState(t,loc);st=`库存状态：${state}`;if(p?.price_monthly?.gross){const pm=Number(p.price_monthly.gross||0).toFixed(2);const locCn=LOCATION_CN[p.location]||p.location;txt=`约 €${pm} /月（${locCn}）`;est=`创建前费用预估：月费 €${pm}（不含超额流量）`}}
   byId('typePrice').textContent=txt;byId('costEst').textContent=est
   byId('typeStock').innerHTML=st.replace('API可售(库存未知)','<span class="stock-warn">API可售(库存未知)</span>').replace('API显示该机房不可售','<span class="stock-bad">API显示该机房不可售</span>')
 }
