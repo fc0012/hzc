@@ -42,8 +42,24 @@ def verify_auth(credentials: HTTPBasicCredentials = Depends(security)):
         raise HTTPException(
             status_code=428,  # Precondition Required
             detail="需要先设置密码",
-            headers={"X-Need-Setup": "true"},
         )
+    
+    correct_username = secrets.compare_digest(credentials.username, settings.panel_username)
+    correct_password = secrets.compare_digest(credentials.password, settings.panel_password)
+    
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code=401,
+            detail="用户名或密码错误",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
+
+def verify_auth_optional(credentials: HTTPBasicCredentials = Depends(security)):
+    """可选认证 - 用于需要认证但允许未设置密码的情况"""
+    if not is_password_set():
+        return None
     
     correct_username = secrets.compare_digest(credentials.username, settings.panel_username)
     correct_password = secrets.compare_digest(credentials.password, settings.panel_password)
@@ -213,7 +229,8 @@ async def setup_password(req: SetupPasswordReq):
 
 
 @app.get('/', response_class=HTMLResponse)
-async def home(request: Request, username: str = Depends(verify_auth)):
+async def home(request: Request):
+    """主页 - 允许未认证访问,由前端 JavaScript 处理认证"""
     return templates.TemplateResponse('index.html', {
         'request': request,
         'safe_mode': settings.safe_mode,
