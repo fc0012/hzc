@@ -48,10 +48,10 @@ def verify_auth(credentials: HTTPBasicCredentials = Depends(security)):
     correct_password = secrets.compare_digest(credentials.password, settings.panel_password)
     
     if not (correct_username and correct_password):
+        # 不返回 WWW-Authenticate header,避免浏览器弹出登录框
         raise HTTPException(
             status_code=401,
             detail="用户名或密码错误",
-            headers={"WWW-Authenticate": "Basic"},
         )
     return credentials.username
 
@@ -65,10 +65,10 @@ def verify_auth_optional(credentials: HTTPBasicCredentials = Depends(security)):
     correct_password = secrets.compare_digest(credentials.password, settings.panel_password)
     
     if not (correct_username and correct_password):
+        # 不返回 WWW-Authenticate header,避免浏览器弹出登录框
         raise HTTPException(
             status_code=401,
             detail="用户名或密码错误",
-            headers={"WWW-Authenticate": "Basic"},
         )
     return credentials.username
 
