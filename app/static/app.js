@@ -271,6 +271,9 @@ async function loadMeta(showToast=false){
   byId('f_mem').onchange=renderTypeOptions
   byId('f_family').onchange=renderTypeOptions
   renderTypeOptions()
+  // 启用创建按钮
+  const createBtn = Array.from(document.querySelectorAll('#createModal .modal-actions .btn.primary'))[0]
+  if(createBtn) createBtn.disabled = false
   if(showToast) toast('机型可售信息已刷新（实时库存需以下单结果为准）')
 }
 
@@ -694,9 +697,24 @@ async function submitCreate(){
   const v4=byId('c_primary_ip').value
   const v6=byId('c_primary_ipv6').value
 
-  if(!serverType){ alert('请选择服务器型号'); return }
-  if(!location){ alert('请选择机房'); return }
-  if(!image){ alert('请选择镜像/快照'); return }
+  // 增强表单验证
+  if(!serverType){ toast('请选择服务器型号'); return }
+  if(!location){ toast('请选择机房'); return }
+  if(!image){ toast('请选择镜像/快照'); return }
+
+  // 验证服务器类型是否在可用列表中
+  const validTypes = (META.server_types || []).map(t => t.name)
+  if(serverType && !validTypes.includes(serverType)){
+    toast('所选服务器型号不可用，请刷新页面后重试')
+    return
+  }
+
+  // 验证机房是否在可用列表中
+  const validLocations = (META.locations || []).map(l => l.name)
+  if(location && !validLocations.includes(location)){
+    toast('所选机房不可用，请刷新页面后重试')
+    return
+  }
 
   const body={
     name,
@@ -727,7 +745,7 @@ async function submitCreate(){
     }
 
     if(!r.ok || !d?.ok){
-      alert(d?.detail||d?.error||`创建失败（HTTP ${r.status}）`)
+      toast(d?.detail||d?.error||`创建失败（HTTP ${r.status}）`)
       return
     }
 
@@ -735,7 +753,7 @@ async function submitCreate(){
     closeCreateModal()
     loadData()
   }catch(e){
-    alert(`创建请求失败：${e?.message||e}`)
+    toast(`创建请求失败：${e?.message||e}`)
   }finally{
     CREATING_SERVER = false
     if(btn){ btn.disabled=false; btn.textContent=prevText }

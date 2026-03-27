@@ -200,7 +200,21 @@ class HetznerClient:
             payload["public_net"] = public_net
         async with httpx.AsyncClient(timeout=30) as c:
             r = await c.post(f"{BASE}/servers", headers=self.headers, json=payload)
-            r.raise_for_status()
+            try:
+                r.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                # 解析 Hetzner API 错误格式
+                error_detail = str(e)
+                if e.response is not None:
+                    try:
+                        error_json = e.response.json()
+                        error_obj = error_json.get("error", {})
+                        error_code = error_obj.get("code", "unknown")
+                        error_message = error_obj.get("message", str(e))
+                        error_detail = f"[{error_code}] {error_message}"
+                    except Exception:
+                        error_detail = f"HTTP {e.response.status_code}: {e.response.text[:500]}"
+                raise httpx.HTTPStatusError(error_detail, request=e.request, response=e.response)
             return r.json()
 
     async def delete_server(self, server_id: int):

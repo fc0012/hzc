@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import asyncio
 import uuid
 import time
@@ -138,12 +138,12 @@ async def api_tasks(username: str = Depends(verify_auth)):
 
 
 class CreateServerReq(BaseModel):
-    name: str
-    server_type: str
-    location: str
-    image: str | int
-    primary_ip_id: int | None = None
-    primary_ipv6_id: int | None = None
+    name: str = Field(..., min_length=1, max_length=63, description="服务器名称")
+    server_type: str = Field(..., min_length=1, description="服务器型号")
+    location: str = Field(..., min_length=1, description="机房位置")
+    image: str | int = Field(..., description="镜像ID或名称")
+    primary_ip_id: int | None = Field(None, gt=0, description="IPv4 Primary IP ID")
+    primary_ipv6_id: int | None = Field(None, gt=0, description="IPv6 Primary IP ID")
 
 
 class SnapshotReq(BaseModel):

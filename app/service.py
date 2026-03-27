@@ -1,6 +1,7 @@
 import asyncio
 import datetime as dt
 import httpx
+import logging
 from app.config import settings
 from app.hetzner_client import HetznerClient
 from app.telegram_bot import Tg
@@ -9,8 +10,48 @@ from app.qb_store import QBStore
 from app.auto_policy_store import AutoPolicyStore
 from app.runtime_config import RuntimeConfig
 
+# 配置日志
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
 # Keep same unit behavior as Hetzner panel (binary TiB, though UI labels TB)
 BYTES_IN_TB = 1024**4
+
+
+def build_error_response(error_code: str, message: str, field: str | None = None, suggestion: str | None = None, request: dict | None = None):
+    """
+    构建统一的错误响应格式
+
+    Args:
+        error_code: 错误代码 (如 "validation_error", "api_error", "ip_operation_error")
+        message: 错误消息
+        field: 相关字段名 (可选)
+        suggestion: 恢复建议 (可选)
+        request: 原始请求参数 (可选)
+
+    Returns:
+        dict: 统一格式的错误响应
+    """
+    error_obj = {
+        "code": error_code,
+        "message": message,
+    }
+    if field:
+        error_obj["field"] = field
+    if suggestion:
+        error_obj["suggestion"] = suggestion
+
+    response = {
+        "ok": False,
+        "error": error_obj,
+    }
+    if request:
+        response["request"] = request
+
+    return response
 
 
 class MonitorService:
@@ -414,6 +455,55 @@ class MonitorService:
         return {"ok": True, "server_id": server_id, "new_password": None, "note": "password not returned by api response"}
 
     async def create_server_manual(self, name: str, server_type: str, location: str, image, primary_ip_id: int | None = None, primary_ipv6_id: int | None = None):
+        # 记录操作开始
+        logger.info(f"创建服务器操作开始: name={name}, server_type={server_type}, location={location}, image={image}")
+
+        # 参数验证
+        if not server_type or not server_type.strip():
+            logger.warning(f"创建服务器失败: server_type为空")
+            return {
+                "ok": False,
+                "error": "server_type 不能为空，请选择有效的服务器型号",
+                "request": {
+                    "name": name,
+                    "server_type": server_type,
+                    "location": location,
+                    "image": image,
+                    "primary_ip_id": primary_ip_id,
+                    "primary_ipv6_id": primary_ipv6_id,
+                }
+            }
+
+        if not name or not name.strip():
+            logger.warning(f"创建服务器失败: name为空")
+            return {
+                "ok": False,
+                "error": "服务器名称不能为空",
+                "request": {
+                    "name": name,
+                    "server_type": server_type,
+                    "location": location,
+                    "image": image,
+                    "primary_ip_id": primary_ip_id,
+                    "primary_ipv6_id": primary_ipv6_id,
+                }
+            }
+
+        if not location or not location.strip():
+            logger.warning(f"创建服务器失败: location为空")
+            return {
+                "ok": False,
+                "error": "机房位置不能为空，请选择有效的机房",
+                "request": {
+                    "name": name,
+                    "server_type": server_type,
+                    "location": location,
+                    "image": image,
+                    "primary_ip_id": primary_ip_id,
+                    "primary_ipv6_id": primary_ipv6_id,
+                }
+            }
+
         created = None
         try:
             # placement 波动下先按原参数重试几次
@@ -676,7 +766,49 @@ class MonitorService:
         if not srv:
             return {"ok": False, "error": "server not found"}
 
+        # 操作前预检查
+        # 1. 检查服务器状态
+        server_status = srv.get("status")
+        if server_status not in ("running", "off"):
+            return {
+                "ok": False,
+                "error": f"服务器状态异常，当前状态: {server_status}，无法执行重建操作",
+                "server_id": server_id
+            }
+
+        # 2. 检查Primary IP是否存在
+        net = srv.get("public_net") or {}
+        ipv4_id = ((net.get("ipv4") or {}).get("id"))
+        ipv6_id = ((net.get("ipv6") or {}).get("id"))
+        if not ipv4_id and not ipv6_id:
+            return {
+                "ok": False,
+                "error": "服务器没有配置Primary IP，无法执行保留IP的重建操作",
+                "server_id": server_id
+            }
+
+        # 3. 检查镜像/快照是否可用
         image = int(image_id) if str(image_id).isdigit() else str(image_id)
+        try:
+            if str(image_id).isdigit():
+                # 检查快照是否存在
+                snapshots = await self.client.list_snapshots()
+                snapshot_exists = any(s.get("id") == int(image_id) for s in snapshots)
+                if not snapshot_exists:
+                    return {
+                        "ok": False,
+                        "error": f"快照ID {image_id} 不存在或已被删除",
+                        "server_id": server_id
+                    }
+        except Exception as e:
+            # 快照检查失败不阻止操作，但记录警告
+            await self.tg.send(f"⚠️ 重建前快照检查失败: {str(e)[:200]}")
+
+        name = srv.get("name", f"server-{server_id}")
+        server_type = (srv.get("server_type") or {}).get("name")
+        location = ((srv.get("datacenter") or {}).get("location") or {}).get("name")
+        if not server_type or not location:
+            return {"ok": False, "error": "missing source server type/location"}
 
         name = srv.get("name", f"server-{server_id}")
         server_type = (srv.get("server_type") or {}).get("name")
@@ -702,7 +834,8 @@ class MonitorService:
         async def _create_with_retry():
             created = None
             last_err = None
-            for i in range(8):
+            # 增加重试次数到10次，使用递增等待间隔
+            for i in range(10):
                 try:
                     created = await self.client.create_server(
                         name=name,
@@ -716,7 +849,10 @@ class MonitorService:
                 except httpx.HTTPStatusError as e:
                     last_err = e
                     if e.response is not None and e.response.status_code in (412, 422):
-                        await asyncio.sleep(3 + i * 2)
+                        # 使用递增等待间隔 (2s, 4s, 6s, 8s, ...)
+                        wait_time = 2 + i * 2
+                        await self.tg.send(f"⏳ IP 释放等待中，第 {i+1} 次重试，等待 {wait_time} 秒...")
+                        await asyncio.sleep(wait_time)
                         continue
                     raise
             if created is None and last_err is not None:
@@ -734,31 +870,60 @@ class MonitorService:
             await self.client.delete_server(server_id)
             created = await _create_with_retry()
             path = "fast"
-        except Exception:
+        except Exception as e:
+            # 记录当前操作状态
+            await self.tg.send(f"⚠️ 快速重建失败，尝试安全模式回退\n服务器ID: {server_id}\n错误: {str(e)[:300]}")
+
             # SAFE fallback (best-effort): if old server still exists, poweroff+unassign then create
             try:
                 still = await self.client.get_server(server_id)
             except Exception:
                 still = None
+
             if still:
                 try:
+                    # 安全模式：关机 → 解绑 IP → 删除 → 创建
+                    await self.tg.send(f"🔄 开始安全模式回退: 关机 → 解绑IP → 删除 → 创建")
+
                     pof = await self.client.server_action(server_id, 'poweroff')
                     pof_id = ((pof or {}).get('action') or {}).get('id')
                     if pof_id:
                         await _wait_action_success(int(pof_id), f"poweroff server#{server_id}")
+
                     if ipv4_id:
-                        r4 = await self.client.unassign_primary_ip(int(ipv4_id))
-                        a4 = ((r4 or {}).get("action") or {}).get("id")
-                        if a4:
-                            await _wait_action_success(int(a4), f"unassign ipv4#{ipv4_id}")
+                        try:
+                            r4 = await self.client.unassign_primary_ip(int(ipv4_id))
+                            a4 = ((r4 or {}).get("action") or {}).get("id")
+                            if a4:
+                                await _wait_action_success(int(a4), f"unassign ipv4#{ipv4_id}")
+                        except Exception as e4:
+                            await self.tg.send(f"⚠️ IPv4解绑失败: {str(e4)[:200]}，继续尝试...")
+
                     if ipv6_id:
-                        r6 = await self.client.unassign_primary_ip(int(ipv6_id))
-                        a6 = ((r6 or {}).get("action") or {}).get("id")
-                        if a6:
-                            await _wait_action_success(int(a6), f"unassign ipv6#{ipv6_id}")
+                        try:
+                            r6 = await self.client.unassign_primary_ip(int(ipv6_id))
+                            a6 = ((r6 or {}).get("action") or {}).get("id")
+                            if a6:
+                                await _wait_action_success(int(a6), f"unassign ipv6#{ipv6_id}")
+                        except Exception as e6:
+                            await self.tg.send(f"⚠️ IPv6解绑失败: {str(e6)[:200]}，继续尝试...")
+
                     await self.client.delete_server(server_id)
-                except Exception:
-                    pass
+                    await self.tg.send(f"✅ 安全模式: 旧服务器已删除")
+                except Exception as safe_err:
+                    await self.tg.send(f"❌ 安全模式回退失败: {str(safe_err)[:300]}")
+                    # 如果回退失败，保留IP并通知用户
+                    return {
+                        "ok": False,
+                        "server_id": server_id,
+                        "error": f"安全模式回退失败: {str(safe_err)}",
+                        "note": "Primary IP已保留，请手动检查服务器状态",
+                        "kept_primary_ip_ids": {
+                            "ipv4": int(ipv4_id) if ipv4_id else None,
+                            "ipv6": int(ipv6_id) if ipv6_id else None,
+                        }
+                    }
+
             try:
                 created = await _create_with_retry()
                 path = "safe-fallback"
