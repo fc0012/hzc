@@ -259,6 +259,7 @@ async function loadMeta(showToast=false){
   setCache(CACHE_KEYS.meta, META)
   setCache(CACHE_KEYS.ts, Date.now())
   if(byId('appVersion')) byId('appVersion').textContent = META.app_version || '--'
+  if(byId('appVersionBtn')) byId('appVersionBtn').textContent = META.app_version || '--'
   byId('c_location').innerHTML=META.locations.map(l=>`<option value="${l.name}">${l.name} (${LOCATION_CN[l.name] || l.city || ''})</option>`).join('')
   const fams=[...new Set(META.server_types.map(t=>typeFamily(t.name)).filter(Boolean))].sort()
   byId('f_family').innerHTML=['<option value="">全部系列</option>'].concat(fams.map(f=>`<option value="${f}">${f}</option>`)).join('')
@@ -422,6 +423,7 @@ function bootstrapFromCache(){
   if(cachedMeta){
     META=cachedMeta
     if(byId('appVersion')) byId('appVersion').textContent = META.app_version || '--'
+    if(byId('appVersionBtn')) byId('appVersionBtn').textContent = META.app_version || '--'
   }
   if(Array.isArray(cachedServers) && cachedServers.length){
     CURRENT_SERVERS=cachedServers
@@ -639,6 +641,26 @@ async function restartService(){
   const d=await r.json()
   if(!r.ok||!d?.ok){ alert(d?.detail||d?.error||'重启触发失败'); return }
   toast('服务重启已触发，稍后请刷新页面')
+}
+
+function openApiTokenModal() {
+  byId('apiTokenModal').classList.remove('hidden')
+  byId('new_api_token').value = ''
+}
+function closeApiTokenModal() { byId('apiTokenModal').classList.add('hidden') }
+async function saveApiToken() {
+  const token = byId('new_api_token').value.trim()
+  if(!token){ alert('请输入有效的 API Token'); return }
+  if(!confirm('更换 Token 后将自动重启服务，是否继续？')) return
+  const r = await fetch('/api/config/api_token', {
+    method: 'PUT',
+    headers: {'content-type': 'application/json'},
+    body: JSON.stringify({ token })
+  })
+  const d = await r.json()
+  if(!r.ok||!d?.ok){ alert(d?.detail||d?.error||'保存失败'); return }
+  toast('API Token 已更新，服务正在重启...')
+  closeApiTokenModal()
 }
 
 async function triggerUpgrade(){

@@ -97,7 +97,11 @@
       <button class="btn" onclick="openSnapshotsModal()">快照管理</button>
       <button class="btn" id="safeModeBtn" onclick="toggleSafeMode()">🛡️ 安全OFF</button>
       <button class="btn" onclick="openTGModal()">TG配置</button>
-      <button class="btn btn-danger" onclick="triggerUpgrade()">🚀 一键升级</button>
+      <button class="btn" onclick="openApiTokenModal()">🔑 更换API</button>
+      <div style="display:inline-flex;flex-direction:column;align-items:center;">
+        <button class="btn btn-danger" onclick="triggerUpgrade()" style="width:100%">🚀 一键升级</button>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px;line-height:1">安装版本: <span id="appVersionBtn">--</span></div>
+      </div>
       <button class="btn" onclick="showInstallCommand()">📋 安装命令</button>
       <button class="btn" onclick="openTasksModal()">📊 任务进度</button>
       <button class="btn ghost" id="themeBtn" onclick="toggleTheme()">☀️ 浅色</button>
@@ -263,6 +267,20 @@
         <button class="btn primary" onclick="saveAutoPolicy()">保存策略</button>
         <button class="btn" onclick="deleteAutoPolicy()">删除策略</button>
         <button class="btn" onclick="closeAutoPolicyModal()">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="apiTokenModal" class="modal hidden">
+    <div class="modal-card glass">
+      <h3>更换 API 令牌</h3>
+      <div class="grid">
+        <label style="grid-column: 1 / -1;">Hetzner API Token<input id="new_api_token" type="password" placeholder="请输入新的 API Token" /></label>
+      </div>
+      <div class="hint" style="margin-top:8px">保存后将写入环境变量并自动重启服务以生效。</div>
+      <div class="modal-actions">
+        <button class="btn primary" onclick="saveApiToken()">保存并重启</button>
+        <button class="btn" onclick="closeApiTokenModal()">取消</button>
       </div>
     </div>
   </div>

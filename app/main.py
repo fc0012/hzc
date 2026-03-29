@@ -186,6 +186,10 @@ class TelegramConfigReq(BaseModel):
     telegram_chat_id: str
 
 
+class ApiTokenReq(BaseModel):
+    token: str
+
+
 class AutoPolicyReq(BaseModel):
     server_id: int
     enabled: bool = True
@@ -339,6 +343,38 @@ async def telegram_config_get(username: str = Depends(verify_auth)):
 @app.put('/api/config/telegram')
 async def telegram_config_set(req: TelegramConfigReq, username: str = Depends(verify_auth)):
     return tg_control.set_telegram_config(req.telegram_bot_token, req.telegram_chat_id)
+
+
+@app.put('/api/config/api_token')
+async def api_token_set(req: ApiTokenReq, username: str = Depends(verify_auth)):
+    env_path = Path("/opt/hzc/.env")
+    if not env_path.exists():
+        env_path = Path(".env")
+    
+    if env_path.exists():
+        lines = env_path.read_text(encoding='utf-8').splitlines()
+        updated = False
+        new_lines = []
+        
+        for line in lines:
+            if line.startswith("HETZNER_TOKEN="):
+                new_lines.append(f"HETZNER_TOKEN={req.token}")
+                updated = True
+            else:
+                new_lines.append(line)
+        
+        if not updated:
+            new_lines.append(f"HETZNER_TOKEN={req.token}")
+        
+        env_path.write_text("\n".join(new_lines) + "\n", encoding='utf-8')
+    else:
+        env_path.write_text(f"HETZNER_TOKEN={req.token}\n", encoding='utf-8')
+    
+    cmd = "nohup bash -lc 'cd /opt/hzc && (docker-compose restart hetzner-traffic-guard || docker compose restart hetzner-traffic-guard)' >/tmp/hzc-restart.log 2>&1 &"
+    p = await asyncio.create_subprocess_shell(cmd)
+    await p.communicate()
+    
+    return {"ok": True, "message": "API Token updated and service restarting"}
 
 
 @app.post('/api/service/restart')
