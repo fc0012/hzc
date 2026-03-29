@@ -84,6 +84,24 @@
     </div>
   </div>
 
+  <!-- 登录验证界面 -->
+  <div id="loginOverlay" style="display:none">
+    <div id="setupCard">
+      <h2>👋 欢迎登录</h2>
+      <p>请输入管理员账号和密码以访问面板</p>
+      <label>
+        用户名
+        <input id="loginUsername" placeholder="admin" value="admin" />
+      </label>
+      <label>
+        密码
+        <input id="loginPassword" type="password" placeholder="面板密码" />
+      </label>
+      <div id="loginError" class="error" style="display:none"></div>
+      <button class="btn primary" onclick="submitLogin()">完成登录</button>
+    </div>
+  </div>
+
   <div class="bg-blur"></div>
 
   <header class="topbar glass">
@@ -105,6 +123,7 @@
       <button class="btn" onclick="showInstallCommand()">📋 安装命令</button>
       <button class="btn" onclick="openTasksModal()">📊 任务进度</button>
       <button class="btn ghost" id="themeBtn" onclick="toggleTheme()">☀️ 浅色</button>
+      <button class="btn ghost" style="color:var(--red)" onclick="logout()">注销</button>
     </div>
   </header>
 
@@ -301,6 +320,6 @@
 
   <div id="toast" class="toast hidden"></div>
 
-  <script src="/static/app.js?v={{ app_version }}-1"></script>
+  <script src="/static/app.js?v={{ app_version }}-2"></script>
 </body>
 </html>

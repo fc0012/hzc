@@ -7,6 +7,20 @@ let AUTO_POLICIES={}
 let __rowHtmlCache={}
 let __qbHtmlCache={}
 
+// 全局 fetch 拦截器，捕获自动 401 提示登录
+window.__isShowingAuth = false;
+const originalFetch = window.fetch;
+window.fetch = async function(...args) {
+  const response = await originalFetch(...args);
+  if (response.status === 401) {
+    if (!window.__isShowingAuth) {
+      window.__isShowingAuth = true;
+      document.getElementById('loginOverlay').style.display = 'flex';
+    }
+  }
+  return response;
+};
+
 // 机房中文名称映射
 const LOCATION_CN = {
   'fsn1': '德国-福尔克温克尔',
@@ -964,6 +978,56 @@ async function submitSetupPassword() {
   }
 }
 
+// 正常登录相关函数
+async function submitLogin() {
+  const username = document.getElementById('loginUsername').value.trim()
+  const password = document.getElementById('loginPassword').value
+  const errorDiv = document.getElementById('loginError')
+  
+  if (!username || !password) {
+    errorDiv.textContent = '请完整填写账号和密码'
+    errorDiv.style.display = 'block'
+    return
+  }
+  
+  errorDiv.style.display = 'none';
+  try {
+    const r = await originalFetch('/api/login', {
+      method: 'POST',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({username, password})
+    })
+    const d = await r.json()
+    if (!r.ok || !d?.ok) {
+      errorDiv.textContent = d?.detail || '账号或密码错误'
+      errorDiv.style.display = 'block'
+      return
+    }
+    // 登录成功，隐藏覆盖层并刷新数据
+    document.getElementById('loginOverlay').style.display = 'none'
+    window.__isShowingAuth = false;
+    document.getElementById('loginPassword').value = ''
+    toast('登录成功！')
+    
+    // 如果还没加载过数据，或者因为 401 失败的数据，在此时重新拉取
+    bootstrapFromCache()
+    loadAll(false)
+  } catch(e) {
+    errorDiv.textContent = '网络请求失败: ' + e.message
+    errorDiv.style.display = 'block'
+  }
+}
+
+async function logout() {
+  if(!confirm('确定要注销并安全退出面板吗？')) return
+  try {
+    await originalFetch('/api/logout', { method: 'POST' })
+    document.getElementById('loginOverlay').style.display = 'flex'
+    window.__isShowingAuth = true
+    toast('已安全注销')
+  } catch(e) {}
+}
+
 if(byId('kw')) byId('kw').addEventListener('input',()=>loadData(false))
 initTheme();
 
@@ -976,7 +1040,7 @@ checkNeedSetup().then(needSetup => {
 })
 
 // layered refresh: qB high-frequency, others lower frequency
-setInterval(()=>{ if(!document.hidden) loadQBRealtime() }, 3000)
-setInterval(()=>{ if(!document.hidden) loadData(false) }, 15000)
-setInterval(()=>{ if(!document.hidden && __dailyLoaded) loadDaily(false) }, 60000)
-setInterval(()=>{ if(!document.hidden) loadMeta(false) }, 300000)
+setInterval(()=>{ if(!document.hidden && !window.__isShowingAuth) loadQBRealtime() }, 3000)
+setInterval(()=>{ if(!document.hidden && !window.__isShowingAuth) loadData(false) }, 15000)
+setInterval(()=>{ if(!document.hidden && __dailyLoaded && !window.__isShowingAuth) loadDaily(false) }, 60000)
+setInterval(()=>{ if(!document.hidden && !window.__isShowingAuth) loadMeta(false) }, 300000)

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi import FastAPI, HTTPException, Request, Depends, Response
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -13,6 +13,8 @@ import secrets
 import os
 from pathlib import Path
 from datetime import datetime
+import hmac
+import hashlib
 
 from app.config import settings
 from app.service import monitor
@@ -25,53 +27,74 @@ app = FastAPI(title="Hetzner Traffic Guard")
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 app.mount('/static', StaticFiles(directory='app/static'), name='static')
 
-# HTTP Basic 认证
-security = HTTPBasic()
+# HTTP Basic 认证，关闭自动抛出 401（避免自动发送 WWW-Authenticate 头导致弹窗）
+security = HTTPBasic(auto_error=False)
 
 def is_password_set() -> bool:
     """检查是否已设置密码"""
-    # 如果环境变量中设置了密码,认为已设置
     if settings.panel_password:
         return True
-    # 否则检查标记文件
     return PASSWORD_SET_FLAG.exists()
 
-def verify_auth(credentials: HTTPBasicCredentials = Depends(security)):
+def generate_session_token() -> str:
+    if not settings.panel_password:
+        return "invalid"
+    msg = f"htg_session:{settings.panel_username}"
+    sig = hmac.new(settings.panel_password.encode('utf-8'), msg.encode('utf-8'), hashlib.sha256).hexdigest()
+    return f"{msg}.{sig}"
+
+def verify_session_token(token: str) -> bool:
+    if not token or not is_password_set():
+        return False
+    expected = generate_session_token()
+    return secrets.compare_digest(token, expected)
+
+def verify_auth(request: Request, credentials: HTTPBasicCredentials = Depends(security)):
     """验证面板访问权限"""
-    # 如果未设置密码,返回特殊标记让前端引导设置
     if not is_password_set():
         raise HTTPException(
             status_code=428,  # Precondition Required
             detail="需要先设置密码",
         )
     
-    correct_username = secrets.compare_digest(credentials.username, settings.panel_username)
-    correct_password = secrets.compare_digest(credentials.password, settings.panel_password)
+    # 1. 优先检查 Cookie Token
+    token = request.cookies.get("htg_token")
+    if token and verify_session_token(token):
+        return settings.panel_username
     
-    if not (correct_username and correct_password):
-        # 不返回 WWW-Authenticate header,避免浏览器弹出登录框
-        raise HTTPException(
-            status_code=401,
-            detail="用户名或密码错误",
-        )
-    return credentials.username
+    # 2. 如果 Cookie 无效，检查 Basic Auth
+    if credentials:
+        correct_username = secrets.compare_digest(credentials.username, settings.panel_username)
+        correct_password = secrets.compare_digest(credentials.password, settings.panel_password)
+        if correct_username and correct_password:
+            return credentials.username
+    
+    # 当都没有通过时返回 401（这里不带 WWW-Authenticate 头，故浏览器不原生弹窗）
+    raise HTTPException(
+        status_code=401,
+        detail="未授权访问",
+    )
 
 
-def verify_auth_optional(credentials: HTTPBasicCredentials = Depends(security)):
+def verify_auth_optional(request: Request, credentials: HTTPBasicCredentials = Depends(security)):
     """可选认证 - 用于需要认证但允许未设置密码的情况"""
     if not is_password_set():
         return None
     
-    correct_username = secrets.compare_digest(credentials.username, settings.panel_username)
-    correct_password = secrets.compare_digest(credentials.password, settings.panel_password)
-    
-    if not (correct_username and correct_password):
-        # 不返回 WWW-Authenticate header,避免浏览器弹出登录框
-        raise HTTPException(
-            status_code=401,
-            detail="用户名或密码错误",
-        )
-    return credentials.username
+    token = request.cookies.get("htg_token")
+    if token and verify_session_token(token):
+        return settings.panel_username
+        
+    if credentials:
+        correct_username = secrets.compare_digest(credentials.username, settings.panel_username)
+        correct_password = secrets.compare_digest(credentials.password, settings.panel_password)
+        if correct_username and correct_password:
+            return credentials.username
+            
+    raise HTTPException(
+        status_code=401,
+        detail="未授权访问",
+    )
 
 
 @app.middleware("http")
@@ -170,6 +193,10 @@ class SetupPasswordReq(BaseModel):
     username: str
     password: str
 
+class LoginReq(BaseModel):
+    username: str
+    password: str
+
 
 class RebuildReq(BaseModel):
     image_id: int | str
@@ -257,6 +284,37 @@ async def setup_password(req: SetupPasswordReq):
     PASSWORD_SET_FLAG.touch()
     
     return {"ok": True, "message": "密码设置成功,请刷新页面重新登录"}
+
+
+@app.post('/api/login')
+async def handle_login(req: LoginReq, response: Response):
+    """验证用户登录并派发会话 Cookie"""
+    if not is_password_set():
+        raise HTTPException(428, "需要先设置密码")
+        
+    correct_username = secrets.compare_digest(req.username, settings.panel_username)
+    correct_password = secrets.compare_digest(req.password, settings.panel_password)
+    
+    if not (correct_username and correct_password):
+        raise HTTPException(status_code=401, detail="用户名或密码错误")
+        
+    token = generate_session_token()
+    response.set_cookie(
+        key="htg_token",
+        value=token,
+        max_age=30 * 24 * 3600,
+        httponly=True,
+        samesite="lax",
+        path="/"
+    )
+    return {"ok": True, "message": "登录成功"}
+
+
+@app.post('/api/logout')
+async def handle_logout(response: Response):
+    """清除登录 Cookie"""
+    response.delete_cookie("htg_token", path="/")
+    return {"ok": True}
 
 
 @app.get('/', response_class=HTMLResponse)
