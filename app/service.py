@@ -70,6 +70,33 @@ class MonitorService:
         self._daily_cache_ts = 0.0
         self._daily_cache_ttl = 30.0
 
+    def _migrate_automation_settings(self, old_server_id: int, new_server_id: int):
+        try:
+            old_sid = str(old_server_id)
+            # Migrate auto policy
+            policies = self.auto_policy.all()
+            if old_sid in policies:
+                self.auto_policy.set(new_server_id, policies[old_sid])
+                self.auto_policy.delete(old_server_id)
+                logger.info(f"Migrated auto policy from {old_server_id} to {new_server_id}")
+            
+            # Migrate qb config
+            qbs = self.qb_store.get_all()
+            if old_sid in qbs:
+                self.qb_store.set(new_server_id, qbs[old_sid])
+                self.qb_store.delete(old_server_id)
+                logger.info(f"Migrated qb config from {old_server_id} to {new_server_id}")
+
+            # Clean up old guard state
+            rc = self.runtime.get()
+            guard_state = rc.get("traffic_guard_state") or {}
+            if isinstance(guard_state, dict) and old_sid in guard_state:
+                guard_state.pop(old_sid, None)
+                self.runtime.update({"traffic_guard_state": guard_state})
+                logger.info(f"Cleaned up traffic guard state for old server {old_server_id}")
+        except Exception as e:
+            logger.error(f"Failed to migrate automation settings from {old_server_id} to {new_server_id}: {e}")
+
     async def meta(self):
         # 允许在未配置 HETZNER_TOKEN 时仍返回基础元信息（版本号等）
         try:
@@ -341,9 +368,10 @@ class MonitorService:
 
             # 有策略时沿用原策略逻辑
             if over:
-                if safe_mode:
+                # 策略优先：如果显式开启了服务器策略，则无视全局安全模式执行
+                if safe_mode and not enabled:
                     await self.tg.send(
-                        f"⚠️ SAFE_MODE 告警: {row['name']} (ID:{row['id']}) 达到自动阈值 {threshold:.2f} TB，"
+                        f"⚠️ SAFE_MODE 告警: {row['name']} (ID:{row['id']}) 达到自动阈值 {threshold*100:.1f}% ({threshold*limit_tb:.2f} TB)，"
                         f"当前 {used_tb:.2f} TB，仅通知不执行"
                     )
                     continue
@@ -352,12 +380,12 @@ class MonitorService:
                     await self.tg.send(
                         f"⚠️ 自动重建未执行: {row['name']} (ID:{row['id']})\n"
                         f"原因: 未配置重建镜像/快照\n"
-                        f"当前: {used_tb:.2f} TB / 阈值: {threshold:.2f} TB"
+                        f"当前: {used_tb:.2f} TB / 阈值: {threshold*100:.1f}% ({threshold*limit_tb:.2f} TB)"
                     )
                     continue
                 await self.tg.send(
                     f"🚀 自动重建开始: {row['name']} (ID:{row['id']})\n"
-                    f"当前: {used_tb:.2f} TB / 阈值: {threshold:.2f} TB\n"
+                    f"当前: {used_tb:.2f} TB / 阈值: {threshold*100:.1f}% ({threshold*limit_tb:.2f} TB)\n"
                     f"镜像/快照: {image_id}"
                 )
                 await self.rebuild_with_snapshot_manual(row["id"], image_id)
@@ -391,6 +419,9 @@ class MonitorService:
 
         new_srv = await self.client.create_server_from_image(src, image_id)
         await self.client.delete_server(server_id)
+        new_id = new_srv.get("server", {}).get("id")
+        if new_id:
+            self._migrate_automation_settings(server_id, new_id)
         await self.tg.send(f"✅ Rotated {src['name']} -> {new_srv['server']['name']}")
         return {"ok": True, "new_server": new_srv}
 
@@ -940,6 +971,9 @@ class MonitorService:
                 return {"ok": False, "server_id": server_id, "image_id": image, "error": detail}
 
         new_srv = created.get("server", {})
+        new_id = new_srv.get("id")
+        if new_id:
+            self._migrate_automation_settings(server_id, new_id)
         await self.tg.send(
             f"♻️ 重建已完成（重置流量）\n"
             f"旧服务器ID: {server_id}\n"
@@ -978,6 +1012,9 @@ class MonitorService:
         )
         await self.client.delete_server(server_id)
         new_srv = created.get("server", {})
+        new_id = new_srv.get("id")
+        if new_id:
+            self._migrate_automation_settings(server_id, new_id)
         await self.tg.send(
             f"🧨 完全重建已完成（换IP）\n旧服务器ID: {server_id}\n新服务器ID: {new_srv.get('id')}\n新IP: {new_srv.get('public_net',{}).get('ipv4',{}).get('ip','-')}\n镜像/快照: {image}"
         )
