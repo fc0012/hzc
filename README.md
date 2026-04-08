@@ -1,75 +1,45 @@
-# HZC - Hetzner 流量保护面板
+# 🛡️ Hetzner Traffic Guard (HZC)
 
-面向 Hetzner 的轻量运维工具：
-**流量监控 + 重建策略 + 快照管理 + Telegram 一键运维 + Web 一键升级**。
+专为 Hetzner 服务器打造的智能化流量管理与自动化运维全栈面板。从日常流量监控到极端情况下的自动重装防御，HZC 致力于以最简单的配置，提供最具安全感的服务器托管体验。
 
-> 设计目标：简单、稳、可追踪、可恢复。
+> 💡 **核心目标**：自动、无感、安全。部署完成即可释放双手，避免过高的流量溢出账单。
 
----
-
-## 功能亮点
-
-- 服务器状态与流量总览（含每日趋势）
-- 手动重建（保留原 IP 重建新机）
-- 自动重建策略（按阈值触发）
-- 快照管理（创建 / 删除 / 重命名）
-- 删除服务器（可选保留 IPv4/IPv6）
-- Telegram 机器人快捷操作
-- Web / TG 一键升级 + 升级日志
+![Dashboard Preview](docs/screenshots/dashboard.jpg)
 
 ---
 
-## 页面截图
+## ✨ 核心特性
 
-### 仪表盘
-
-![HZC Dashboard](docs/screenshots/dashboard.jpg)
-
-### 手机端创建弹窗（已支持可滚动）
-
-![Mobile Create Modal](docs/screenshots/mobile-create-modal.jpg)
+- **📊 流量深度监控**：直观展示每月出站流量、今日流量、剩余额度。支持 qBittorrent 客户端级别的数据同步。
+- **🔄 自动化无感重建**：当流量触及阈值，系统会自动根据选定快照重建服务器，**保留原IP地址**，并为您自动继承之前的策略与配置（包括 QB 参数）。
+- **📱 跨平台一键管控**：提供现代化的无缝 Cookie 认证面板，同时支持关联 Telegram Bot，在手机端通过 `/upgrade` 等指令轻松运维。
+- **📸 快照管理系统**：支持直接通过界面管理、预估与创建机器快照。
+- **🔐 `SAFE_MODE` 数据保护**：默认挂起敏感的高危操作（如直接删机），通过安全阈值告警辅助人工判断。在信任期后支持自由控制关闭安全锁。
 
 ---
 
-## 快速开始（3步）
+## 🚀 极速部署 (推荐)
 
-### 1) 一条命令启动（推荐）
+### 选项 A：从 Docker 镜像安装
 
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/fc0012/hzc/main/scripts/bootstrap.sh)
-```
-
-可直接指定动作：
+最省心、且完全避免环境污染的部署方式：
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/fc0012/hzc/main/scripts/bootstrap.sh) install
-bash <(curl -fsSL https://raw.githubusercontent.com/fc0012/hzc/main/scripts/bootstrap.sh) upgrade
-bash <(curl -fsSL https://raw.githubusercontent.com/fc0012/hzc/main/scripts/bootstrap.sh) uninstall
-bash <(curl -fsSL https://raw.githubusercontent.com/fc0012/hzc/main/scripts/bootstrap.sh) status
-```
-
-### 2) 使用 Docker 镜像（推荐）
-
-```bash
-# 拉取镜像
-docker pull ghcr.io/fc0012/hzc:latest
-
-# 运行容器
 docker run -d \
   --name hetzner-traffic-guard \
   -p 1227:1227 \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -e HETZNER_TOKEN=your_token_here \
-  -e WEB_PASSWORD=your_password_here \
-  -e SECRET_KEY=your_secret_key_here \
+  -v $(pwd)/state:/app/state \
+  -e HETZNER_TOKEN="YOUR_HETZNER_API_TOKEN" \
   ghcr.io/fc0012/hzc:latest
 ```
+*(注意：首次启动需要通过界面右上角/提示页设置面板访问账号)*
 
-或使用 docker-compose：
+### 选项 B：使用 Docker Compose
 
-```bash
-# 创建 docker-compose.yml
-cat > docker-compose.yml << 'EOF'
+在服务器上创建 `docker-compose.yml`：
+
+```yaml
 services:
   hetzner-traffic-guard:
     image: ghcr.io/fc0012/hzc:latest
@@ -79,135 +49,62 @@ services:
       - "1227:1227"
     environment:
       - HETZNER_TOKEN=your_token_here
-      - WEB_PASSWORD=your_password_here
-      - SECRET_KEY=your_secret_key_here
     volumes:
       - ./state:/app/state
       - /var/run/docker.sock:/var/run/docker.sock
-EOF
+```
 
-# 启动
+随后运行：
+```bash
 docker-compose up -d
 ```
 
-### 3) 本地脚本方式
+### 选项 C：极简一件安装脚本 (一键解决所有环境依赖)
 
 ```bash
-git clone https://github.com/fc0012/hzc.git
-cd hzc
-chmod +x scripts/onekey.sh
-./scripts/onekey.sh
-```
-
-脚本内置菜单：安装/升级/卸载/状态检查。也可直接子命令：
-
-```bash
-./scripts/onekey.sh install
-./scripts/onekey.sh upgrade
-./scripts/onekey.sh uninstall
-./scripts/onekey.sh status
-```
-
-> 先填 `HETZNER_TOKEN`，其它配置可后续在页面补充。
-
-### 4) 打开面板
-
-```text
-http://你的服务器IP:1227
+bash <(curl -fsSL https://raw.githubusercontent.com/fc0012/hzc/main/scripts/bootstrap.sh)
 ```
 
 ---
 
-## 一键升级
+## ⚙️ 进阶配置与环境变量
 
-### Web / TG 一键升级
+HZC 支持以环境变量形式覆盖绝大部分参数。配置一次，持续生效。
 
-- 页面顶部：`🚀 一键升级`
-- Telegram：`/upgrade`
-
-### 命令行升级（兜底）
-
-```bash
-cd hzc
-./scripts/upgrade.sh
-```
-
-升级逻辑：
-- 拉取 `origin/main`
-- 已最新则不重复升级
-- 有新版本自动重建容器
-- 升级后自动健康检查 `/api/ping`
-- 自动清理部分历史镜像/构建缓存（降低磁盘堆积）
+| 环境变量 | 默认值 | 说明 |
+| :--- | :--- | :--- |
+| `HETZNER_TOKEN` | *必须* | 您的 Hetzner Cloud API Key |
+| `TRAFFIC_LIMIT_TB` | `20` | 单台机器的默认出网流量上限 (TB) |
+| `ROTATE_THRESHOLD` | `0.9` | 触发自动重建逻辑的百分比阈值（0.9 即 90%） |
+| `SAFE_MODE` | `false` | 安全模式（只告警防守，不执行重建开机）。 |
+| `TELEGRAM_BOT_TOKEN` | *空* | 用于接收警告通知 / TG 运维机器人的 Token |
+| `TELEGRAM_CHAT_ID` | *空* | 用于接收报警通知人的个人数字 ID |
+| `CHECK_INTERVAL_MINUTES`| `5` | 轮询与自动防卫检查的周期时间 (分钟) |
 
 ---
 
-## 默认安全策略
+## 🤖 自动化工作流与数据迁移机制
 
-默认参数：
-- `SAFE_MODE=true`（只告警，不自动执行危险动作）
-- `ROTATE_THRESHOLD=0.98`
-- `CHECK_INTERVAL_MINUTES=5`
-
-建议先观察，再逐步放开自动化。
+新版本的 HZC 实现了完整的自动化周期管理：
+1. **策略不丢失**：当服务器成功触发流量保护被自动销毁重建之后，原有的**重建策略**会自动迁移到这台获得了全新 ID 的服务器上。
+2. **连接不中断**：自动继承原服务器关联的 qBittorrent 节点信息。不需要人工干预二次绑定。
+3. **状态复位**：自动化重置流量监控计费基数，全新计算当月使用量。
 
 ---
 
-## 常用环境变量
+## 🛠️ 运维与升级指示
 
-### 必填
+如果您想要让正在运行的面版更新到最新版代码：
 
-- `HETZNER_TOKEN`
+**Web端：**
+访问面板页面，点击顶部导航栏中的 `🚀 一键升级`。
 
-### 常用
+**Telegram 端：**
+在绑定后的聊天框内直接发送：`/upgrade`。
 
-- `TRAFFIC_LIMIT_TB`（默认 20）
-- `ROTATE_THRESHOLD`（默认 0.98）
-- `CHECK_INTERVAL_MINUTES`（默认 5）
-- `SAFE_MODE`（默认 true）
-- `APP_VERSION`（前端显示版本号）
-
-### Telegram（可选）
-
-- `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_CHAT_ID`
-
-### qB（可选）
-
-- `QB_URL`
-- `QB_USERNAME`
-- `QB_PASSWORD`
-
----
-
-## 常见问题
-
-### 1) 页面样式旧 / 按钮位置异常
-
-先强刷浏览器：
-- Windows/Linux: `Ctrl + Shift + R`
-- macOS: `Cmd + Shift + R`
-
-### 2) 一键升级“触发了但版本没变”
-
-优先看：
-- `/api/ping`
-- TG 的“升级日志”（`/upgradelog`）
-
-### 3) 升级失败怎么查
-
-```bash
-docker logs -f hetzner-traffic-guard
-```
-
-并结合：
+**手动 Shell 升级（排障兜底）：**
 ```bash
 cd hzc
 ./scripts/upgrade.sh
 ```
-
----
-
-## 免责声明
-
-关闭 `SAFE_MODE` 后，自动动作可能涉及重建/删除。  
-请先在测试环境验证，再用于生产。
+>*升级机制会自动对比 GitHub Main 分支代码差异以判断并下发容器更新指令，不丢失基于数据卷挂载的历史日志。*
