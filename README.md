@@ -4,7 +4,7 @@
 
 > 💡 **核心目标**：自动、无感、安全。部署完成即可释放双手，避免过高的流量溢出账单。
 
-![Dashboard Preview](docs/screenshots/dashboard.jpg)
+![Dashboard Preview](docs/screenshots/dashboard_v2.jpg)
 
 ---
 
