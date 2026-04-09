@@ -281,6 +281,7 @@ class MonitorService:
                 "over_threshold": pct >= float(pol.get("threshold", settings.rotate_threshold)),
                 "qb": qbs,
                 "auto_policy": pol,
+                "created": s["created"],
             }
             rows.append(row)
         self.last_snapshot = rows

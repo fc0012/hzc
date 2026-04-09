@@ -582,6 +582,34 @@ function openDeleteModal(serverId){
   const t = byId('del_schedule_time');
   if(t) t.value = '';
 }
+function fillDelTime(mode){
+  const sid = byId('del_server_id').value;
+  const s = CURRENT_SERVERS.find(x => String(x.id) === String(sid));
+  if(!s || !s.created) {
+    alert('无法获取机器创建时间，无法自动计算');
+    return;
+  }
+  let target = new Date();
+  if(mode === 'billing'){
+    const created = new Date(s.created);
+    target = new Date();
+    target.setUTCDate(created.getUTCDate());
+    target.setUTCHours(created.getUTCHours());
+    target.setUTCMinutes(created.getUTCMinutes());
+    target.setUTCSeconds(0);
+    if(target <= new Date()) target.setUTCMonth(target.getUTCMonth() + 1);
+  } else if(mode === 'month_end') {
+    target = new Date();
+    target.setUTCMonth(target.getUTCMonth() + 1);
+    target.setUTCDate(0);
+    target.setUTCHours(23);
+    target.setUTCMinutes(59);
+    target.setUTCSeconds(0);
+  }
+  const offset = target.getTimezoneOffset() * 60000;
+  const localTarget = new Date(target.getTime() - offset);
+  byId('del_schedule_time').value = localTarget.toISOString().slice(0, 16);
+}
 function closeDeleteModal(){ byId('deleteModal').classList.add('hidden') }
 
 async function cancelScheduledDelete(id){
