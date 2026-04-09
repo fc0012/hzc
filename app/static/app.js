@@ -148,9 +148,6 @@ function rowHtml(r){
 
   const q=r.qb||{}
   const p=r.auto_policy||{}
-  const policyOn=!!p.enabled
-  const policyLabel=policyOn ? `策略 ${Math.round((Number(p.threshold||0))*100)}% · ${policyImageLabel(p.image_id)}` : '自动策略'
-  const policyBtnClass = policyOn ? 'btn action policy-on' : 'btn action policy-off'
   const usedPct = Math.min(100, ((Number(r.used_tb||0) / Number(r.limit_tb||20)) * 100))
   const hue = Math.max(0, 220 - Math.round(usedPct*2.2))
   const usedCell = `<div class="ratio-text">${usedPct.toFixed(1)}%</div><div class="progress progress-mini" title="${usedPct.toFixed(1)}%"><div class="bar" style="width:${usedPct}%;background:hsl(${hue} 85% 50%)"></div></div><div class="daily-mini">${formatTBPrecise(r.used_tb)} / ${formatTBPrecise(r.limit_tb)}</div>`
@@ -170,7 +167,6 @@ function rowHtml(r){
     <td><div class="op-row">
       <button class="btn action" onclick="openQBModal(${r.id})">配置qB</button>
       <button class="btn action" onclick="openQBWeb(${r.id}, '${ipText}')">打开qB</button>
-      <button class="${policyBtnClass}" onclick="openAutoPolicyModal(${r.id})" title="${policyLabel}">${policyLabel}</button>
       <button class="btn action" onclick="rebootServer(${r.id})">重启</button>
       <button class="btn action" onclick="hardRebootServer(${r.id})">强制重启</button>
       <button class="btn btn-danger action" onclick="openRebuildModal(${r.id})">重建</button>
@@ -847,10 +843,9 @@ function openQBModal(serverId){
 }
 function closeQBModal(){ byId('qbModal').classList.add('hidden') }
 
-function openAutoPolicyModal(serverId){
+function openAutoPolicyModal(){
   byId('autoPolicyModal').classList.remove('hidden')
-  byId('ap_server_id').value = serverId
-  const p = AUTO_POLICIES[String(serverId)] || {}
+  const p = AUTO_POLICIES['global'] || {}
   byId('ap_enabled').checked = !!p.enabled
   byId('ap_threshold').value = p.threshold ?? '0.95'
   const official=[
@@ -868,7 +863,7 @@ function closeAutoPolicyModal(){ byId('autoPolicyModal').classList.add('hidden')
 
 async function saveAutoPolicy(){
   const body={
-    server_id:Number(byId('ap_server_id').value),
+    server_id: "global",
     enabled:!!byId('ap_enabled').checked,
     threshold:Number(byId('ap_threshold').value||0),
     image_id: byId('ap_image_id').value ? byId('ap_image_id').value : null,
@@ -883,9 +878,8 @@ async function saveAutoPolicy(){
 }
 
 async function deleteAutoPolicy(){
-  const sid=Number(byId('ap_server_id').value)
-  if(!confirm(`确认删除服务器 ${sid} 的自动策略？`)) return
-  const r=await fetch(`/api/auto_policy/${sid}`,{method:'DELETE'})
+  if(!confirm(`确认删除全局自动策略？`)) return
+  const r=await fetch(`/api/auto_policy/global`,{method:'DELETE'})
   const d=await r.json()
   if(!r.ok||!d?.ok){ alert(d?.detail||d?.error||'删除失败'); return }
   toast('自动策略已删除')

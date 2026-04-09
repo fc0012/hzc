@@ -219,7 +219,7 @@ class ApiTokenReq(BaseModel):
 
 
 class AutoPolicyReq(BaseModel):
-    server_id: int
+    server_id: str
     enabled: bool = True
     threshold: float
     image_id: int | str | None = None
@@ -390,7 +390,7 @@ async def auto_policy_set(req: AutoPolicyReq, username: str = Depends(verify_aut
 
 
 @app.delete('/api/auto_policy/{server_id}')
-async def auto_policy_delete(server_id: int, username: str = Depends(verify_auth)):
+async def auto_policy_delete(server_id: str, username: str = Depends(verify_auth)):
     return monitor.auto_policy_delete(server_id)
 
 

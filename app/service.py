@@ -73,12 +73,6 @@ class MonitorService:
     def _migrate_automation_settings(self, old_server_id: int, new_server_id: int):
         try:
             old_sid = str(old_server_id)
-            # Migrate auto policy
-            policies = self.auto_policy.all()
-            if old_sid in policies:
-                self.auto_policy.set(new_server_id, policies[old_sid])
-                self.auto_policy.delete(old_server_id)
-                logger.info(f"Migrated auto policy from {old_server_id} to {new_server_id}")
             
             # Migrate qb config
             qbs = self.qb_store.get_all()
@@ -266,7 +260,7 @@ class MonitorService:
                 except Exception as e:
                     qbs = {"enabled": True, "error": str(e)}
 
-            pol = policies.get(str(s["id"]), {})
+            pol = policies.get("global", {})
             row = {
                 "id": s["id"],
                 "name": s["name"],
@@ -1063,7 +1057,7 @@ class MonitorService:
     def auto_policies(self):
         return self.auto_policy.all()
 
-    def auto_policy_set(self, server_id: int, enabled: bool, threshold: float, image_id=None):
+    def auto_policy_set(self, server_id: str, enabled: bool, threshold: float, image_id=None):
         img = None
         if image_id is not None and str(image_id) != "":
             img = int(image_id) if str(image_id).isdigit() else str(image_id)
@@ -1075,7 +1069,7 @@ class MonitorService:
         self.auto_policy.set(server_id, p)
         return {"ok": True, "server_id": server_id, "policy": p}
 
-    def auto_policy_delete(self, server_id: int):
+    def auto_policy_delete(self, server_id: str):
         self.auto_policy.delete(server_id)
         return {"ok": True, "server_id": server_id}
 
