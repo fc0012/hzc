@@ -574,8 +574,8 @@ async function submitDeleteServer(){
     keep_mode: "fast",
   }
   if(!confirm(`高风险确认：将删除服务器 ${sid}。请确认选项无误。`)) return
-  const verify = prompt('请输入 DELETE 确认执行：','')
-  if((verify||'').trim().toUpperCase() !== 'DELETE'){ alert('未确认，已取消'); return }
+  const verify = prompt('请输入 yes 确认执行：','')
+  if((verify||'').trim().toLowerCase() !== 'yes'){ alert('未确认，已取消'); return }
   const r=await fetch(`/api/server/${sid}/delete`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})
   const d=await r.json()
   if(!r.ok||!d?.ok){alert(d?.detail||d?.error||'删除失败');return}
@@ -588,8 +588,8 @@ async function submitRebuild(){
   const imageId=byId('rebuild_snapshot').value
   if(!imageId){alert('请先选择镜像或快照');return}
   if(!confirm(`二次确认：将删除旧服务器 ${sid}，并使用原IP创建同配置新服务器（镜像/快照: ${imageId}），继续吗？`)) return
-  const verify = prompt('请输入 REBUILD 确认执行：','')
-  if((verify||'').trim().toUpperCase() !== 'REBUILD'){ alert('未确认，已取消'); return }
+  const verify = prompt('请输入 yes 确认执行：','')
+  if((verify||'').trim().toLowerCase() !== 'yes'){ alert('未确认，已取消'); return }
   const r=await fetch(`/api/rebuild/${sid}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({image_id:imageId})})
   const d=await r.json()
   if(!r.ok||!d?.ok){alert(d?.detail||d?.error||'重建失败');return}
@@ -602,8 +602,8 @@ async function submitFullRebuild(){
   const imageId=byId('rebuild_snapshot').value
   if(!imageId){alert('请先选择镜像或快照');return}
   if(!confirm(`高风险确认：将完全重建服务器 ${sid}，丢弃旧IP并使用新IP，继续吗？`)) return
-  const verify = prompt('请输入 FULLREBUILD 确认执行：','')
-  if((verify||'').trim().toUpperCase() !== 'FULLREBUILD'){ alert('未确认，已取消'); return }
+  const verify = prompt('请输入 yes 确认执行：','')
+  if((verify||'').trim().toLowerCase() !== 'yes'){ alert('未确认，已取消'); return }
   const r=await fetch(`/api/rebuild_full/${sid}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({image_id:imageId})})
   const d=await r.json()
   if(!r.ok||!d?.ok){alert(d?.detail||d?.error||'完全重建失败');return}
