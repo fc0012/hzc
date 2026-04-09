@@ -167,14 +167,19 @@
 
   <section class="panel glass" style="margin-top:12px">
     <div class="panel-head">
-      <div class="panel-title">服务器列表</div>
+      <div class="panel-title" style="display:flex;align-items:center;gap:12px">
+        服务器列表
+        <button class="btn primary premium" onclick="openAutoPolicyModal()" title="设置所有服务器的全局自动重建策略">
+          <span style="font-size:14px">⚙️</span> 全局策略配置
+        </button>
+      </div>
       <div class="hint">支持手动重建、创建快照、复制ID</div>
     </div>
     <div class="table-wrap">
       <table id="tb">
         <thead>
         <tr>
-          <th>ID</th><th>名称</th><th>配置/型号</th><th>IP</th><th>状态</th><th>qB状态(实时+累计)</th><th>已用流量</th><th>今日流量</th><th>操作 <button class="btn primary small" style="padding:2px 8px;font-size:11px;margin-left:4px" onclick="openAutoPolicyModal()" title="设置所有服务器的全局自动重建策略">全局策略</button></th>
+          <th>ID</th><th>名称</th><th>配置/型号</th><th>IP</th><th>状态</th><th>qB状态(实时+累计)</th><th>已用流量</th><th>今日流量</th><th>操作</th>
         </tr>
         </thead>
         <tbody></tbody>
