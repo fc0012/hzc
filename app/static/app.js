@@ -4,6 +4,7 @@ let CURRENT_SERVERS=[]
 let DAILY_MAP={}
 let QB_NODES={}
 let AUTO_POLICIES={}
+let SCHEDULED_DELETIONS={}
 let __rowHtmlCache={}
 let __qbHtmlCache={}
 
@@ -156,12 +157,22 @@ function rowHtml(r){
   const ipText = (r.ip||'').trim()
   const ipCell = ipText ? `<span class='copy-ip' title='点击复制IP' onclick="copyText('${ipText}')">${ipText}</span>` : ''
 
+  const isSched = SCHEDULED_DELETIONS && SCHEDULED_DELETIONS[r.id]
+  let deleteBtnObj = `<button class="btn btn-danger action" onclick="openDeleteModal(${r.id})">删除</button>`
+  let statusBadge = `<span class="badge ${r.status==='running'?'running':'other'}">${r.status}</span>`
+  
+  if (isSched) {
+    const stTime = new Date(isSched.schedule_time * 1000).toLocaleString()
+    deleteBtnObj = `<button class="btn btn-danger action" style="background:#ff9800" onclick="cancelScheduledDelete(${r.id})" title="计划于 ${stTime} 删除">取消删除</button>`
+    statusBadge += `<div style="font-size:10px;color:#ff9800;margin-top:4px">待删: ${stTime}</div>`
+  }
+
   return `<tr data-id="${r.id}">
     <td><span title="点击复制ID" onclick="copyText('${r.id}')" style="cursor:pointer">${r.id}</span></td>
     <td><span class='name-wrap'>${r.name}</span><button class='icon-btn' title='修改名称' onclick="renameServer(${r.id}, '${(r.name||'').replace(/'/g,"\\'")}')">✎</button></td>
     <td>${r.server_type || '-'} · ${r.cores||0}C/${r.memory_gb||0}GB/${r.disk_gb||0}GB</td>
     <td>${ipCell}</td>
-    <td><span class="badge ${r.status==='running'?'running':'other'}">${r.status}</span></td>
+    <td>${statusBadge}</td>
     <td class="qb-cell" data-id="${r.id}">${qbCell}</td>
     <td>${usedCell}</td><td>${todayCell}</td>
     <td><div class="op-row">
@@ -170,7 +181,7 @@ function rowHtml(r){
       <button class="btn action" onclick="rebootServer(${r.id})">重启</button>
       <button class="btn action" onclick="hardRebootServer(${r.id})">强制重启</button>
       <button class="btn btn-danger action" onclick="openRebuildModal(${r.id})">重建</button>
-      <button class="btn btn-danger action" onclick="openDeleteModal(${r.id})">删除</button>
+      ${deleteBtnObj}
     </div></td>
   </tr>`
 }
@@ -442,9 +453,15 @@ function bootstrapFromCache(){
   }
 }
 
+async function loadScheduledDeletions(){
+  const r=await fetch('/api/scheduled_deletions')
+  const d=await r.json()
+  SCHEDULED_DELETIONS=d.scheduled_deletions || {}
+}
+
 async function loadAll(showToast=false){
   // 非阻塞刷新：页面先显示缓存，再后台并行刷新
-  const tasks=[loadData(false),loadMeta(false),loadQBNodes(),loadAutoPolicies(),loadSafeMode()]
+  const tasks=[loadData(false),loadMeta(false),loadQBNodes(),loadAutoPolicies(),loadSafeMode(),loadScheduledDeletions()]
   Promise.allSettled(tasks).then(()=>{
     loadQBRealtime()
     lazyLoadDailyOnce()
@@ -562,8 +579,19 @@ function openDeleteModal(serverId){
   byId('del_make_snapshot').checked=false
   byId('del_keep_ipv4').checked=false
   byId('del_keep_ipv6').checked=false
+  const t = byId('del_schedule_time');
+  if(t) t.value = '';
 }
 function closeDeleteModal(){ byId('deleteModal').classList.add('hidden') }
+
+async function cancelScheduledDelete(id){
+  if(!confirm(`二次确认：取消服务器 ${id} 的定时删除任务？`)) return;
+  const r=await fetch(`/api/server/${id}/cancel_delete`, {method:'POST'});
+  const d=await r.json();
+  if(!r.ok||!d?.ok){alert(d?.detail||d?.error||'取消失败');return}
+  toast('定时删除已取消');
+  loadAll(false);
+}
 
 async function submitDeleteServer(){
   const sid=Number(byId('del_server_id').value)
@@ -573,7 +601,18 @@ async function submitDeleteServer(){
     keep_ipv6: !!byId('del_keep_ipv6').checked,
     keep_mode: "fast",
   }
-  if(!confirm(`高风险确认：将删除服务器 ${sid}。请确认选项无误。`)) return
+  const schedVal = byId('del_schedule_time')?.value
+  if(schedVal) {
+     const t = new Date(schedVal).getTime()
+     if(t > Date.now()) {
+        body.schedule_time = t / 1000
+     } else {
+        alert('计划自动删除时间必须在未来')
+        return
+     }
+  }
+  
+  if(!confirm(`高风险确认：将${body.schedule_time ? '定时' : ''}删除服务器 ${sid}。请确认选项无误。`)) return
   const verify = prompt('请输入 yes 确认执行：','')
   if((verify||'').trim().toLowerCase() !== 'yes'){ alert('未确认，已取消'); return }
   const r=await fetch(`/api/server/${sid}/delete`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})

@@ -2,6 +2,7 @@ import asyncio
 import datetime as dt
 import httpx
 import logging
+import time
 from app.config import settings
 from app.hetzner_client import HetznerClient
 from app.telegram_bot import Tg
@@ -301,6 +302,7 @@ class MonitorService:
         rows = await self.collect(use_cache=False)
         safe_mode = self.get_safe_mode()
         now = int(dt.datetime.utcnow().timestamp())
+        rebuild_tasks = []
 
         rc = self.runtime.get()
         guard_state = rc.get("traffic_guard_state") or {}
@@ -378,13 +380,17 @@ class MonitorService:
                     )
                     continue
                 await self.tg.send(
-                    f"🚀 自动重建开始: {row['name']} (ID:{row['id']})\n"
+                    f"🚀 自动重建触发: {row['name']} (ID:{row['id']})\n"
                     f"当前: {used_tb:.2f} TB / 阈值: {threshold*100:.1f}% ({threshold*limit_tb:.2f} TB)\n"
                     f"镜像/快照: {image_id}"
                 )
-                await self.rebuild_with_snapshot_manual(row["id"], image_id)
+                rebuild_tasks.append(self.rebuild_with_snapshot_manual(row["id"], image_id))
 
         self.runtime.update({"traffic_guard_state": guard_state})
+
+        if rebuild_tasks:
+            # 批量并发执行所有触发了策略的机器重建
+            await asyncio.gather(*rebuild_tasks, return_exceptions=True)
 
     async def rotate_server(self, server_id: int):
         servers = await self.client.list_servers()
@@ -447,6 +453,36 @@ class MonitorService:
             "estimated_monthly_eur": est_monthly,
             "estimation_note": "基于历史快照均值；无历史时按磁盘35%估算",
         }
+
+    async def check_scheduled_deletions(self):
+        rc = self.runtime.get()
+        scheduled = rc.get("scheduled_deletions", {})
+        if not scheduled:
+            return
+
+        now = time.time()
+        to_delete = []
+        for sid_s, task in list(scheduled.items()):
+            sched_time = task.get("schedule_time", 0)
+            if now >= sched_time:
+                to_delete.append(task)
+                del scheduled[sid_s]
+
+        if to_delete:
+            self.runtime.update({"scheduled_deletions": scheduled})
+            for task in to_delete:
+                sid = task.get("server_id")
+                st_str = dt.datetime.fromtimestamp(task['schedule_time'], tz=dt.timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+                try:
+                    await self.delete_server_manual(
+                        sid, 
+                        create_snapshot=task.get("create_snapshot", False),
+                        keep_ipv4=task.get("keep_ipv4", False),
+                        keep_ipv6=task.get("keep_ipv6", False),
+                        keep_mode=task.get("keep_mode", "fast")
+                    )
+                except Exception as e:
+                    await self.tg.send(f"❌ 定时删除任务失败: ID {sid}\n时间: {st_str}\n错误: {str(e)[:500]}")
 
     async def create_snapshot_manual(self, server_id: int, description: str | None = None):
         if not description:

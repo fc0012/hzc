@@ -207,6 +207,7 @@ class DeleteServerReq(BaseModel):
     keep_ipv4: bool = False
     keep_ipv6: bool = False
     keep_mode: str = "fast"  # fast only
+    schedule_time: float | None = None
 
 
 class TelegramConfigReq(BaseModel):
@@ -229,6 +230,7 @@ class AutoPolicyReq(BaseModel):
 async def startup_event():
     if settings.hetzner_token:
         scheduler.add_job(monitor.rotate_if_needed, 'interval', minutes=settings.check_interval_minutes, id='check-traffic', replace_existing=True)
+        scheduler.add_job(monitor.check_scheduled_deletions, 'interval', minutes=1, id='check-scheduled-deletions', replace_existing=True)
         scheduler.start()
     if tg_control.enabled:
         import asyncio
@@ -615,6 +617,21 @@ async def hard_reboot_server(server_id: int, username: str = Depends(verify_auth
 async def delete_server(server_id: int, req: DeleteServerReq, username: str = Depends(verify_auth)):
     if not settings.hetzner_token:
         raise HTTPException(status_code=500, detail='HETZNER_TOKEN missing')
+    
+    if req.schedule_time and req.schedule_time > time.time():
+        rc = monitor.runtime.get()
+        scheduled = rc.get("scheduled_deletions", {})
+        scheduled[str(server_id)] = {
+            "server_id": server_id,
+            "schedule_time": req.schedule_time,
+            "create_snapshot": req.create_snapshot,
+            "keep_ipv4": req.keep_ipv4,
+            "keep_ipv6": req.keep_ipv6,
+            "keep_mode": req.keep_mode
+        }
+        monitor.runtime.update({"scheduled_deletions": scheduled})
+        return {"ok": True, "message": "已成功加入定时删除队列"}
+
     return await monitor.delete_server_manual(
         server_id,
         create_snapshot=req.create_snapshot,
@@ -622,6 +639,23 @@ async def delete_server(server_id: int, req: DeleteServerReq, username: str = De
         keep_ipv6=req.keep_ipv6,
         keep_mode=req.keep_mode,
     )
+
+
+@app.get('/api/scheduled_deletions')
+async def get_scheduled_deletions(username: str = Depends(verify_auth)):
+    rc = monitor.runtime.get()
+    return {"scheduled_deletions": rc.get("scheduled_deletions", {})}
+
+
+@app.post('/api/server/{server_id}/cancel_delete')
+async def cancel_delete(server_id: int, username: str = Depends(verify_auth)):
+    rc = monitor.runtime.get()
+    scheduled = rc.get("scheduled_deletions", {})
+    if str(server_id) in scheduled:
+        del scheduled[str(server_id)]
+        monitor.runtime.update({"scheduled_deletions": scheduled})
+        return {"ok": True, "message": "定时删除已被取消"}
+    return {"ok": False, "error": "未找到此机器的定时删除任务"}
 
 
 @app.get('/api/action/{action_id}')
